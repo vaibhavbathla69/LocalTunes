@@ -1,0 +1,4 @@
+// Keep these values stable when refreshing or updating the installed app.
+PRODUCT_BUNDLE_IDENTIFIER = com.personal.localtunes
+APP_DISPLAY_NAME = LocalTunes
+PRODUCT_NAME = LocalTunes

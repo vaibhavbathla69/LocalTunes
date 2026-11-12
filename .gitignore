@@ -1,0 +1,31 @@
+# Generated projects/builds
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+dist/
+*.xcresult/
+*.ipa
+*.app/
+*.log
+.DS_Store
+.vscode/settings.json
+__pycache__/
+# Personal files and signing material must never enter Git.
+*.mp3
+*.m4a
+*.aac
+*.wav
+*.aiff
+*.aif
+*.alac
+*.flac
+*.caf
+*.lrc
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.keychain*
+.env*
+LibraryBackup/
