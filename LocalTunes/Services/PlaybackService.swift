@@ -49,6 +49,7 @@ final class PlaybackService: ObservableObject {
         observations.append(player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             Task { @MainActor in
                 guard let self else { return }
+                guard self.player === player else { return }
                 self.isPlaying = player.timeControlStatus == .playing
                 self.updateNowPlaying()
             }
@@ -75,7 +76,7 @@ final class PlaybackService: ObservableObject {
                 let savedPosition = checkpoint?.entryID == queue.currentID ? (checkpoint?.seconds ?? queue.position) : (checkpoint == nil ? (legacy ?? queue.position) : queue.position)
                 await rebuild(autoplay: false, seekTo: savedPosition)
             }
-        } catch { report(error) }
+        } catch { wantsPlayback = false; report(error) }
     }
 
     func play(ids: [String], startingAt id: String? = nil) async {
@@ -84,25 +85,28 @@ final class PlaybackService: ObservableObject {
         await rebuild(autoplay: true)
     }
 
-    func toggle() async { if wantsPlayback { pause() } else { await resume() } }
+    func toggle() async { if wantsPlayback && (player.currentItem != nil || isRebuilding) { pause() } else { await resume() } }
 
     func resume() async {
+        synchronizeCurrentItem()
         guard queue.current != nil else { return }
         wantsPlayback = true
         do {
             try activateSession()
             if player.currentItem == nil || position >= duration - 0.1 { await rebuild(autoplay: true) }
             else { player.play(); updateNowPlaying() }
-        } catch { report(error) }
+        } catch { wantsPlayback = false; report(error) }
     }
 
     func pause() {
+        synchronizeCurrentItem()
         wantsPlayback = false
         resumeAfterInterruption = false
         player.pause(); isPlaying = false; savePosition(); updateNowPlaying()
     }
 
     func seek(_ value: Double) {
+        synchronizeCurrentItem()
         guard value.isFinite, duration > 0 else { return }
         let target = min(max(value, 0), duration)
         position = target; queue.position = target
@@ -113,12 +117,14 @@ final class PlaybackService: ObservableObject {
     }
 
     func next() async {
+        synchronizeCurrentItem()
         guard let entry = queue.following(automatic: false) else { pause(); seek(0); return }
         queue.currentID = entry.id; queue.position = 0
         saveQueue(); await rebuild(autoplay: true)
     }
 
     func previous() async {
+        synchronizeCurrentItem()
         if position > 3 { seek(0); return }
         guard let index = queue.currentIndex, !queue.entries.isEmpty else { return }
         let previous = index > 0 ? index - 1 : (queue.repeatMode == .all ? queue.entries.count - 1 : 0)
@@ -127,6 +133,7 @@ final class PlaybackService: ObservableObject {
     }
 
     func append(_ id: String, next: Bool) async {
+        synchronizeCurrentItem()
         let wasEmpty = queue.current == nil
         queue.position = position
         queue.append(id, next: next); saveQueue()
@@ -140,6 +147,7 @@ final class PlaybackService: ObservableObject {
     }
 
     func remove(entryIDs: Set<String>) async {
+        synchronizeCurrentItem()
         let old = queue.currentID, playing = wantsPlayback
         queue.position = position
         queue.remove(entryIDs: entryIDs); saveQueue()
@@ -152,15 +160,17 @@ final class PlaybackService: ObservableObject {
     }
 
     func move(from offsets: IndexSet, to destination: Int) async {
+        synchronizeCurrentItem()
         queue.position = position
         queue.move(from: offsets, to: destination); saveQueue(); await replaceUpcoming()
     }
 
-    func toggleShuffle() async { queue.position = position; queue.toggleShuffle(); saveQueue(); await replaceUpcoming() }
-    func cycleRepeat() async { queue.position = position; queue.repeatMode = queue.repeatMode.next; saveQueue(); await replaceUpcoming() }
+    func toggleShuffle() async { synchronizeCurrentItem(); queue.position = position; queue.toggleShuffle(); saveQueue(); await replaceUpcoming() }
+    func cycleRepeat() async { synchronizeCurrentItem(); queue.position = position; queue.repeatMode = queue.repeatMode.next; saveQueue(); await replaceUpcoming() }
 
     func refreshSong(_ song: Song) {
         if currentSong?.id == song.id { currentSong = song; updateNowPlaying() }
+        for key in Array(itemSongs.keys) where itemSongs[key]?.id == song.id { itemSongs[key] = song }
     }
 
     func savePosition() {
@@ -194,6 +204,7 @@ final class PlaybackService: ObservableObject {
         itemEntries.removeAll(); itemSongs.removeAll(); handledItem = nil
         position = 0; duration = 0
         guard let entry = queue.current else {
+            wantsPlayback = false
             currentSong = nil; isPlaying = false; isRebuilding = false
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
@@ -223,7 +234,7 @@ final class PlaybackService: ObservableObject {
             updateNowPlaying(loadArtwork: true)
         } catch {
             guard token == generation else { return }
-            isRebuilding = false; isPlaying = false; report(error)
+            isRebuilding = false; isPlaying = false; wantsPlayback = false; report(error)
         }
     }
 
@@ -261,13 +272,22 @@ final class PlaybackService: ObservableObject {
             itemEntries.removeValue(forKey: ObjectIdentifier(item)); itemSongs.removeValue(forKey: ObjectIdentifier(item))
         }
         await fillUpcoming()
+        updateNowPlaying()
     }
 
     private func currentItemChanged() async {
         guard !isRebuilding else { return }
-        guard let item = player.currentItem else {
+        guard player.currentItem != nil else {
+            wantsPlayback = false
             isPlaying = false; position = duration; savePosition(); updateNowPlaying(); return
         }
+        synchronizeCurrentItem()
+        await fillUpcoming()
+    }
+
+    /// Reconcile synchronously before user edits as KVO delivery may trail a natural transition.
+    private func synchronizeCurrentItem() {
+        guard !isRebuilding, let item = player.currentItem else { return }
         let key = ObjectIdentifier(item)
         guard key != handledItem, let entry = itemEntries[key], let song = itemSongs[key] else { return }
         handledItem = key
@@ -277,9 +297,8 @@ final class PlaybackService: ObservableObject {
         itemEntries = itemEntries.filter { valid.contains($0.key) }
         itemSongs = itemSongs.filter { valid.contains($0.key) }
         observeStatus(item); saveQueue()
-        do { try await db.recordPlay(song.id) } catch { report(error) }
+        Task { do { try await db.recordPlay(song.id) } catch { report(error) } }
         updateNowPlaying(loadArtwork: true)
-        await fillUpcoming()
     }
 
     private func observeStatus(_ item: AVPlayerItem) {
@@ -300,6 +319,9 @@ final class PlaybackService: ObservableObject {
     }
 
     private func updateNowPlaying(loadArtwork: Bool = false) {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.changeShuffleModeCommand.currentShuffleType = queue.shuffle ? .items : .off
+        commands.changeRepeatModeCommand.currentRepeatType = queue.repeatMode == .one ? .one : (queue.repeatMode == .all ? .all : .off)
         guard let song = currentSong else { return }
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPMediaItemPropertyTitle] = song.title
