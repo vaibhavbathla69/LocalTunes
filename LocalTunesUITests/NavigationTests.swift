@@ -16,6 +16,7 @@ final class NavigationTests: XCTestCase {
         app.searchFields.firstMatch.tap()
         app.searchFields.firstMatch.typeText("A song")
         XCTAssertTrue(app.staticTexts["No matches"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
         app.tabBars.buttons["Playlists"].tap()
         app.buttons["Create playlist"].tap()
         let alert = app.alerts["New playlist"]
@@ -56,6 +57,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Music stays with you'")).firstMatch.waitForExistence(timeout: 5))
         capture(app, name: "06-Lyrics")
         app.buttons["Done"].tap()
+        if !app.buttons["nowPlaying.queue"].isHittable { app.swipeUp() }
         app.buttons["nowPlaying.queue"].tap()
         XCTAssertTrue(app.navigationBars["Your queue"].waitForExistence(timeout: 5))
         capture(app, name: "07-Queue")

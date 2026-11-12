@@ -48,15 +48,14 @@ final class LibraryModel: ObservableObject {
         guard !isImporting else { return }
         isImporting = true; progress = ImportProgress()
         importTask = Task {
-            await importer.run(urls) { [weak self] update in
-                await MainActor.run { self?.progress = update }
-            }
+            await importer.run(urls) { [weak self] update in await self?.receiveProgress(update) }
             isImporting = false; showImportReport = true
             await refresh()
         }
     }
 
     func cancelImport() { importTask?.cancel() }
+    private func receiveProgress(_ update: ImportProgress) { progress = update }
     func scanInbox() { importURLs([paths.inbox]) }
 
     func favourite(_ song: Song) async {

@@ -18,6 +18,7 @@ struct NowPlayingView: View {
                     Palette.background.ignoresSafeArea()
                     if let song = player.currentSong {
                         ArtworkView(song: song, size: max(proxy.size.width, proxy.size.height), fullSize: true)
+                            .frame(width: proxy.size.width, height: proxy.size.height).clipped()
                             .blur(radius: 85).opacity(0.3).allowsHitTesting(false).ignoresSafeArea()
                         ScrollView {
                             VStack(spacing: 26) {
@@ -59,7 +60,7 @@ struct NowPlayingView: View {
                                 }
                                 Text(song.album).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             }.padding(.horizontal, 28).padding(.bottom, 24).frame(maxWidth: 560).frame(maxWidth: .infinity)
-                        }
+                        }.frame(width: proxy.size.width, height: proxy.size.height)
                     } else { ContentUnavailableView("Nothing playing", systemImage: "music.note") }
                 }.frame(width: proxy.size.width, height: proxy.size.height)
             }

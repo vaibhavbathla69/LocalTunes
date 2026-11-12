@@ -107,7 +107,7 @@ struct SongListView: View {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear).task { await loadNext() }
             }
         }
-        .listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background)
+        .listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background).scrollDismissesKeyboard(.interactively)
         .overlay {
             if songs.isEmpty && !loading && !canLoadMore {
                 ContentUnavailableView(search.isEmpty ? "Make room for music" : "No matches", systemImage: search.isEmpty ? "music.note" : "magnifyingglass", description: Text(search.isEmpty ? "Import songs using the + button. Favourites appear here after you add them." : "Try a song, album or artist name."))
