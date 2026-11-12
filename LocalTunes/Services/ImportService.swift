@@ -20,7 +20,7 @@ actor ImportService {
     let paths: LibraryPaths
     private let logger = Logger(subsystem: "LocalTunes", category: "Import")
     private var running = false
-    static let extensions: Set<String> = ["mp3", "m4a", "aac", "wav", "wave", "aif", "aiff", "aifc", "alac", "caf", "mp4", "flac"]
+    static let extensions: Set<String> = ["mp3", "m4a", "m4b", "m4r", "aac", "wav", "wave", "aif", "aiff", "aifc", "alac", "caf", "mp4", "flac", "au", "snd", "ac3", "amr"]
 
     init(db: LibraryDatabase, paths: LibraryPaths) { self.db = db; self.paths = paths }
 
@@ -45,8 +45,9 @@ actor ImportService {
                 let values = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 guard values.isSymbolicLink != true else { continue }
                 if values.isDirectory == true {
+                    var enumerationErrors: [String] = []
                     guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles, .skipsPackageDescendants], errorHandler: { url, error in
-                        self.logger.error("Folder enumeration failed: \(error.localizedDescription, privacy: .public)")
+                        if enumerationErrors.count < 100 { enumerationErrors.append("\(url.lastPathComponent): \(error.localizedDescription)") }
                         return true
                     }) else { throw LibraryError.message("Could not open folder.") }
                     while let url = enumerator.nextObject() as? URL {
@@ -55,6 +56,7 @@ actor ImportService {
                         if resource.isSymbolicLink == true { enumerator.skipDescendants(); continue }
                         if resource.isRegularFile == true { collect(url) }
                     }
+                    state.errors.append(contentsOf: enumerationErrors.prefix(max(0, 100 - state.errors.count)))
                 } else {
                     collect(root)
                     // Sibling access may be refused by a file provider; folder import is the reliable alternative.
@@ -64,6 +66,7 @@ actor ImportService {
             } catch { state.errors.append("\(root.lastPathComponent): \(error.localizedDescription)") }
         }
         state.total = candidates.count + lyricFiles.count
+        if Task.isCancelled { state.cancelled = true }
         await progress(state)
         for source in candidates {
             if Task.isCancelled { state.cancelled = true; break }
@@ -84,9 +87,11 @@ actor ImportService {
             state.fileFraction = 1
             await progress(state)
         }
-        if !state.cancelled {
+        if !state.cancelled && !lyricFiles.isEmpty {
             // Index only names and IDs, never audio; disambiguate equal basenames using source folder metadata.
-            let ids = (try? await db.allIDs()) ?? []
+            let ids: [String]
+            do { ids = try await db.allIDs() }
+            catch { state.errors.append("Lyric matching index: \(error.localizedDescription)"); state.isFinished = true; await progress(state); return }
             var matches: [String: [Song]] = [:]
             for id in ids {
                 if let song = try? await db.song(id) {

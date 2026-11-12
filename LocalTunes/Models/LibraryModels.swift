@@ -45,6 +45,11 @@ struct QueueEntry: Codable, Identifiable, Equatable, Sendable {
     var songID: String
 }
 
+struct PlaybackPosition: Codable, Sendable {
+    var entryID: String?
+    var seconds: Double
+}
+
 /// Queue identity is independent of song identity: the same song may occur twice.
 struct PlaybackQueue: Codable, Equatable, Sendable {
     var entries: [QueueEntry] = []

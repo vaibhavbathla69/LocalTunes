@@ -213,5 +213,29 @@ actor LibraryDatabase {
         return try decoder.decode(type, from: Data(bytes: blob, count: Int(sqlite3_column_bytes(statement, 0))))
     }
 
-    func checkpoint() throws { try execute("PRAGMA wal_checkpoint(TRUNCATE)") }
+    func savePlaybackQueue(_ queue: PlaybackQueue) throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try setState("queue", value: queue)
+            try setState("position.v2", value: PlaybackPosition(entryID: queue.currentID, seconds: queue.position))
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    /// SQLite's online backup API produces a consistent snapshot, including WAL contents.
+    func backup(to url: URL) throws {
+        var destination: OpaquePointer?
+        guard sqlite3_open(url.path, &destination) == SQLITE_OK, let destination else {
+            if let destination { sqlite3_close(destination) }
+            throw LibraryError.message("Could not open backup destination.")
+        }
+        defer { sqlite3_close(destination) }
+        guard let backup = sqlite3_backup_init(destination, "main", connection, "main") else { throw error() }
+        let result = sqlite3_backup_step(backup, -1)
+        let finish = sqlite3_backup_finish(backup)
+        guard result == SQLITE_DONE, finish == SQLITE_OK else { throw LibraryError.message("Could not create a consistent database backup.") }
+    }
 }

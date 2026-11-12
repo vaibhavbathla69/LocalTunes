@@ -31,6 +31,7 @@ final class PlaybackService: ObservableObject {
     private var refillGeneration: Int?
     private var lastSavedPosition: Double = -100
     private var resumeAfterInterruption = false
+    private var wantsPlayback = false
 
     init(db: LibraryDatabase, paths: LibraryPaths) {
         self.db = db; self.paths = paths
@@ -69,7 +70,9 @@ final class PlaybackService: ObservableObject {
                 queue = saved
                 let valid = Set(try await db.allIDs())
                 queue.remove(entryIDs: Set(queue.entries.filter { !valid.contains($0.songID) }.map(\.id)))
-                let savedPosition = try await db.state("position", as: Double.self) ?? queue.position
+                let checkpoint = try await db.state("position.v2", as: PlaybackPosition.self)
+                let legacy = try await db.state("position", as: Double.self)
+                let savedPosition = checkpoint?.entryID == queue.currentID ? (checkpoint?.seconds ?? queue.position) : (checkpoint == nil ? (legacy ?? queue.position) : queue.position)
                 await rebuild(autoplay: false, seekTo: savedPosition)
             }
         } catch { report(error) }
@@ -81,10 +84,11 @@ final class PlaybackService: ObservableObject {
         await rebuild(autoplay: true)
     }
 
-    func toggle() async { if isPlaying { pause() } else { await resume() } }
+    func toggle() async { if wantsPlayback { pause() } else { await resume() } }
 
     func resume() async {
         guard queue.current != nil else { return }
+        wantsPlayback = true
         do {
             try activateSession()
             if player.currentItem == nil || position >= duration - 0.1 { await rebuild(autoplay: true) }
@@ -93,6 +97,7 @@ final class PlaybackService: ObservableObject {
     }
 
     func pause() {
+        wantsPlayback = false
         resumeAfterInterruption = false
         player.pause(); isPlaying = false; savePosition(); updateNowPlaying()
     }
@@ -135,7 +140,7 @@ final class PlaybackService: ObservableObject {
     }
 
     func remove(entryIDs: Set<String>) async {
-        let old = queue.currentID, playing = isPlaying
+        let old = queue.currentID, playing = wantsPlayback
         queue.position = position
         queue.remove(entryIDs: entryIDs); saveQueue()
         if old != queue.currentID { await rebuild(autoplay: playing) }
@@ -160,17 +165,16 @@ final class PlaybackService: ObservableObject {
 
     func savePosition() {
         queue.position = position
-        let value = position
-        lastSavedPosition = value
-        Task { do { try await db.setState("position", value: value) } catch { report(error) } }
+        let checkpoint = PlaybackPosition(entryID: queue.currentID, seconds: position)
+        lastSavedPosition = position
+        Task { do { try await db.setState("position.v2", value: checkpoint) } catch { report(error) } }
     }
 
     private func saveQueue() {
         let snapshot = queue
         Task {
             do {
-                try await db.setState("queue", value: snapshot)
-                try await db.setState("position", value: snapshot.position)
+                try await db.savePlaybackQueue(snapshot)
             } catch { report(error) }
         }
     }
@@ -182,6 +186,7 @@ final class PlaybackService: ObservableObject {
     }
 
     private func rebuild(autoplay: Bool, seekTo: Double = 0) async {
+        wantsPlayback = autoplay
         generation += 1
         let token = generation
         isRebuilding = true
@@ -211,7 +216,7 @@ final class PlaybackService: ObservableObject {
             isRebuilding = false
             await fillUpcoming()
             guard token == generation else { return }
-            if autoplay {
+            if wantsPlayback {
                 try activateSession(); player.play()
                 try await db.recordPlay(song.id)
             }
@@ -245,6 +250,10 @@ final class PlaybackService: ObservableObject {
     }
 
     private func replaceUpcoming() async {
+        if isRebuilding {
+            await rebuild(autoplay: wantsPlayback, seekTo: position)
+            return
+        }
         generation += 1
         let current = player.currentItem
         for item in player.items() where item !== current {
@@ -347,7 +356,8 @@ final class PlaybackService: ObservableObject {
                 guard let self, let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                       let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
                 if type == .began {
-                    self.resumeAfterInterruption = self.isPlaying
+                    self.resumeAfterInterruption = self.wantsPlayback
+                    self.wantsPlayback = false
                     self.player.pause(); self.isPlaying = false; self.savePosition()
                 } else {
                     let options = AVAudioSession.InterruptionOptions(rawValue: note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
