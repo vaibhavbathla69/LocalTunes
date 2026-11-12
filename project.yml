@@ -42,12 +42,23 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.personal.localtunes.tests
         GENERATE_INFOPLIST_FILE: YES
+  LocalTunesUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [LocalTunesUITests]
+    dependencies:
+      - target: LocalTunes
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.localtunes.uitests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   LocalTunes:
     build:
       targets:
         LocalTunes: all
         LocalTunesTests: [test]
+        LocalTunesUITests: [test]
     test:
-      targets: [LocalTunesTests]
+      targets: [LocalTunesTests, LocalTunesUITests]
       gatherCoverageData: true

@@ -14,14 +14,24 @@ __pycache__/
 # Personal files and signing material must never enter Git.
 *.mp3
 *.m4a
+*.m4b
+*.m4r
 *.aac
 *.wav
+*.wave
 *.aiff
 *.aif
+*.aifc
 *.alac
 *.flac
 *.caf
+*.mp4
+*.au
+*.snd
+*.amr
+*.ac3
 *.lrc
+*.sqlite*
 *.p12
 *.p8
 *.cer
