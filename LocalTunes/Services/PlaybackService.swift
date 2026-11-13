@@ -113,6 +113,7 @@ final class PlaybackService: ObservableObject {
 
     func resume() async {
         synchronizeCurrentItem()
+        if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
         guard queue.current != nil else { return }
         wantsPlayback = true
         do {

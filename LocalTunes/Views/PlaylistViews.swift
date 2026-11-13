@@ -112,7 +112,7 @@ private struct PlaylistLibraryRow: View {
                 Text(playlist.name).font(.headline).lineLimit(2)
                 Text("Playlist • \(playlist.songIDs.count) songs").font(.caption).foregroundStyle(Palette.muted)
             }
-        }.padding(.vertical, 6).task(id: playlist.songIDs.first) {
+        }.padding(.vertical, 6).task(id: "\(playlist.songIDs.first ?? "")|\(library.revision)") {
             if let id = playlist.songIDs.first { do { song = try await library.db.song(id) } catch { library.errorMessage = error.localizedDescription } }
             else { song = nil }
         }

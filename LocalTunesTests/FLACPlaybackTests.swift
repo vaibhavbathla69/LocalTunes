@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import LocalTunes
 
 final class FLACPlaybackTests: XCTestCase {
@@ -68,6 +69,23 @@ final class FLACPlaybackTests: XCTestCase {
         XCTAssertEqual(player.queue.current?.songID, songs[0].id)
         XCTAssertFalse(player.sleepTimer.isActive)
         player.pause()
+    }
+    @MainActor
+    func testArtworkEditCreatesNewCoversAndLeavesFLACBytesUntouched() async throws {
+        let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let song = songs[0]
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80)).image { context in
+            UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 80, height: 80))
+        }
+        let model = LibraryModel(paths: paths, db: db)
+        let edits = SongEdits(title: "Edited FLAC", artist: song.artist, album: song.album, genre: song.genre, track: 1, disc: 1, year: 2024, artworkPath: nil)
+        try await model.updateSong(song.id, edits: edits, artwork: try XCTUnwrap(image.pngData()))
+        let updated = try await db.song(song.id)
+        let artwork = try XCTUnwrap(updated?.artworkPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: paths.documents.appendingPathComponent(artwork).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: paths.documents.appendingPathComponent(artwork.replacingOccurrences(of: ".jpg", with: ".thumb.jpg")).path))
+        XCTAssertEqual(updated?.title, "Edited FLAC")
+        XCTAssertEqual(try LibraryPaths.fingerprint(paths.audioURL(for: song)), song.fingerprint)
     }
     @MainActor
     func testRepeatOneCountsEachActualLoop() async throws {
