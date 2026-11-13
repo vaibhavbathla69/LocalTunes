@@ -21,8 +21,8 @@ struct LyricsView: View {
                 if let song = player.currentSong {
                     if raw.isEmpty {
                         ContentUnavailableView {
-                            Label("The words are yours to add", systemImage: "quote.bubble")
-                        } description: { Text("Attach an LRC file or paste plain lyrics. Everything stays offline.") } actions: {
+                            Label("No lyrics", systemImage: "quote.bubble")
+                        } description: { Text("Attach an LRC file or paste lyrics.") } actions: {
                             Button("Attach lyrics") { attaching = true }.buttonStyle(.borderedProminent)
                             Button("Write or paste lyrics") { editing = true }
                         }

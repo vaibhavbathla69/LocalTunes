@@ -42,8 +42,6 @@ struct AlbumDetailView: View {
             if !songs.isEmpty {
                 Button { reordering = true } label: { Label("Reorder tracks", systemImage: "arrow.up.arrow.down").font(.subheadline.bold()).padding(.vertical, 8) }
                     .disabled(refreshing).listRowBackground(Color.clear).listRowSeparator(.hidden)
-                Text("Album names and track numbers come from your files. If numbers are missing or incorrect, use Reorder tracks to save your own order.")
-                    .font(.footnote).foregroundStyle(Palette.muted).listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background)
@@ -63,7 +61,7 @@ struct AlbumDetailView: View {
         }
         .overlay {
             if isLoading && songs.isEmpty { ProgressView("Opening album…") }
-            else if summary?.count == 0 { ContentUnavailableView("No imported tracks in this album", systemImage: "square.stack", description: Text("Only songs imported into LocalTunes appear here.")) }
+            else if summary?.count == 0 { ContentUnavailableView("No songs", systemImage: "square.stack") }
         }
         .task(id: library.revision) { await reload() }
         .sheet(isPresented: $reordering) { AlbumOrderEditor(albumName: albumName) }
@@ -73,7 +71,7 @@ struct AlbumDetailView: View {
     }
 
     private var albumDescription: String {
-        guard let summary else { return "Loading your album…" }
+        guard let summary else { return "" }
         let duration = summary.duration < 60 ? "\(Int(summary.duration)) sec" : "\(Int(summary.duration / 60)) min"
         return "\(summary.artist)\n\(summary.count) \(summary.count == 1 ? "song" : "songs") • \(duration)"
     }
@@ -139,9 +137,7 @@ private struct AlbumOrderEditor: View {
                             }
                         }.padding(.vertical, 4)
                     }.onMove { offsets, destination in songs.move(fromOffsets: offsets, toOffset: destination) }
-                } header: { Text(albumName) } footer: {
-                    Text("Drag the handles to arrange tracks, then tap Save. This order is used the next time you play the album. Your audio files stay unchanged.")
-                }
+                } header: { Text(albumName) }
             }.environment(\.editMode, .constant(.active))
                 .navigationTitle("Track order").navigationBarTitleDisplayMode(.inline)
                 .toolbar {

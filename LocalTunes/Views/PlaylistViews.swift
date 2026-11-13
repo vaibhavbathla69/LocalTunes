@@ -6,14 +6,10 @@ struct PlaylistsView: View {
     @State private var name = ""
     var body: some View {
         List {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("A mix for every version of you.").font(.title2.bold())
-                Text("\(library.playlists.count) playlists • all on your iPhone").font(.subheadline).foregroundStyle(Palette.muted)
-            }.padding(.vertical, 12).listRowBackground(Color.clear).listRowSeparator(.hidden)
             NavigationLink { SongListView(title: "Liked songs", favourite: true) } label: {
                 HStack(spacing: 16) {
                     CollectionCover(symbol: "heart.fill", size: 70, seed: "Liked songs")
-                    VStack(alignment: .leading, spacing: 6) { Text("Liked songs").font(.headline); Text("Your favourites, together").font(.caption).foregroundStyle(Palette.muted) }
+                    Text("Liked songs").font(.headline)
                 }.padding(.vertical, 6)
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             ForEach(library.playlists) { playlist in
@@ -43,7 +39,7 @@ struct PlaylistDetailView: View {
     private var playlist: Playlist? { library.playlists.first { $0.id == playlistID } }
     var body: some View {
         List {
-            CollectionHeader(title: playlist?.name ?? "Playlist", subtitle: "\(playlist?.songIDs.count ?? 0) songs • Curated by you", song: songs.first)
+            CollectionHeader(title: playlist?.name ?? "Playlist", subtitle: "\(playlist?.songIDs.count ?? 0) songs", song: songs.first)
                 .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let playlist {
                 HStack {
@@ -132,7 +128,7 @@ struct PlaylistPicker: View {
                         await library.savePlaylists(library.playlists + [playlist]); dismiss()
                     } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                Section("Your playlists") {
+                Section("Playlists") {
                     ForEach(library.playlists) { playlist in
                         Button(playlist.name) { Task { await library.add(songID, to: playlist.id); dismiss() } }
                     }

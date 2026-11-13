@@ -2,6 +2,10 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.2.1 — simpler labels
+
+Removed decorative slogans, repeated subtitles and album help paragraphs from the main screens. Home, search, playlists and the player keep concise navigation labels, music metadata and controls. Album ordering, library storage and app identity are unchanged.
+
 ### Version 1.2 — album pages and correct track order
 
 Tap the album name at the top of Now Playing, or open Library → Albums → an album, to see its artwork, artist, duration and complete numbered track list. Album Play and tapping a track build a queue for that album in disc/track-number order and turn shuffle off; Shuffle remains a separate action.

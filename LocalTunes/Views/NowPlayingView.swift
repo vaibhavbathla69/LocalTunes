@@ -18,10 +18,8 @@ struct NowPlayingView: View {
                     if let song = player.currentSong {
                         VStack(spacing: 22) {
                             Button { album = AlbumDestination(name: song.album) } label: {
-                                VStack(spacing: 7) {
-                                    Text("VIEW ALBUM").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(.white.opacity(0.6))
-                                    HStack(spacing: 7) { Text(song.album).lineLimit(1); Image(systemName: "chevron.right").font(.caption2.bold()) }.font(.subheadline.weight(.semibold))
-                                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                                HStack(spacing: 7) { Text(song.album).lineLimit(1); Image(systemName: "chevron.right").font(.caption2.bold()) }.font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                             }.buttonStyle(.plain).accessibilityLabel("Open album \(song.album)").accessibilityIdentifier("nowPlaying.album")
                             ArtworkView(song: song, size: max(130, min(350, min(proxy.size.width - 52, proxy.size.height * 0.39))), fullSize: true, cornerRadius: 12)
                                 .shadow(color: .black.opacity(0.35), radius: 28, y: 16)
@@ -55,7 +53,7 @@ struct NowPlayingView: View {
                             Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
                             Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
                         }
-                        Button("Your queue", systemImage: "list.bullet") { queue = true }
+                        Button("Queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
                     } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Now Playing options")
                 }
@@ -127,7 +125,7 @@ struct QueueView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("\(player.queue.entries.count) tracks • make it your own") {
+                Section("\(player.queue.entries.count) tracks") {
                     ForEach(player.queue.entries) { entry in QueueSongRow(entry: entry).listRowBackground(Color.white.opacity(0.05)).listRowSeparator(.hidden) }
                         .onDelete { offsets in
                             let ids = Set(offsets.compactMap { player.queue.entries.indices.contains($0) ? player.queue.entries[$0].id : nil })
@@ -136,8 +134,8 @@ struct QueueView: View {
                         .onMove { from, to in Task { await player.move(from: from, to: to) } }
                 }
             }.scrollContentBackground(.hidden).background { ArtworkBackdrop(song: player.currentSong, strength: 0.45).ignoresSafeArea() }
-                .navigationTitle("Your queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-                .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("The queue is clear", systemImage: "list.bullet", description: Text("Long-press any song to play next or add to queue.")) } }
+                .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+                .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("Queue empty", systemImage: "list.bullet") } }
         }
     }
 }

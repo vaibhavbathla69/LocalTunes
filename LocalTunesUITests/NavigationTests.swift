@@ -80,7 +80,7 @@ final class NavigationTests: XCTestCase {
         app.buttons["Done"].tap()
         if !app.buttons["nowPlaying.queue"].isHittable { app.swipeUp() }
         app.buttons["nowPlaying.queue"].tap()
-        XCTAssertTrue(app.navigationBars["Your queue"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Queue"].waitForExistence(timeout: 5))
         capture(app, name: "07-Queue")
         app.buttons["Done"].tap()
         app.buttons["nowPlaying.next"].tap()

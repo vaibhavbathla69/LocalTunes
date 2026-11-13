@@ -13,7 +13,6 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: "waveform").font(.largeTitle).foregroundStyle(Palette.accent)
                     Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LocalTunes").font(.title.bold())
-                    Text("A home for the music you keep.").foregroundStyle(.secondary)
                 }.padding(.vertical, 12)
             }
             Section("On this iPhone") {
