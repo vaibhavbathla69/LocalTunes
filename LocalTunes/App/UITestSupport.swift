@@ -10,7 +10,9 @@ enum UITestSupport {
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("CI-input-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: source) }
-        for (name, seconds) in [("CI reference tone", 60), ("CI second tone", 30)] {
+        let albumTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-album")
+        let inputs = [("CI reference tone", 60), ("CI second tone", 30)] + (albumTest ? [("CI Zulu opener", 45)] : [])
+        for (name, seconds) in inputs {
             var data = Data()
             let size = seconds * 44100 * 2
             func text(_ value: String) { data.append(contentsOf: value.utf8) }
@@ -23,13 +25,15 @@ enum UITestSupport {
             try "[00:00.00]Music stays with you\n[00:20.00]Every word, right here\n[00:40.00]Your own collection".write(to: source.appendingPathComponent(name + ".lrc"), atomically: true, encoding: .utf8)
         }
         await ImportService(db: db, paths: paths).run([source]) { _ in }
-        guard try await db.statistics().count == 2 else { throw LibraryError.message("CI test input import failed.") }
+        guard try await db.statistics().count == inputs.count else { throw LibraryError.message("CI test input import failed.") }
         // Generated artwork exercises warm/cool palette transitions in simulator screenshots.
         for var song in try await db.songs() {
-            let warm = song.originalFilename.contains("reference")
+            let warm = !song.originalFilename.contains("second")
             song.artist = "LocalTunes Studio"
             song.album = warm ? "After Hours" : "Blue Hour"
             song.genre = "Electronic"
+            song.trackNumber = song.originalFilename.contains("Zulu") ? 1 : (warm ? 2 : 1)
+            song.discNumber = 1
             song.artworkPath = try MetadataExtractor.writeArtwork(cover(warm: warm), id: song.id, paths: paths)
             try await db.save(song)
         }

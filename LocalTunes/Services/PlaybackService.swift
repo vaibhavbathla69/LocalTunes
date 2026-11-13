@@ -79,7 +79,8 @@ final class PlaybackService: ObservableObject {
         } catch { wantsPlayback = false; report(error) }
     }
 
-    func play(ids: [String], startingAt id: String? = nil) async {
+    func play(ids: [String], startingAt id: String? = nil, shuffled: Bool? = nil) async {
+        if let shuffled { queue.shuffle = shuffled }
         queue.replace(ids, startAt: id.flatMap { ids.firstIndex(of: $0) } ?? 0)
         saveQueue()
         await rebuild(autoplay: true)

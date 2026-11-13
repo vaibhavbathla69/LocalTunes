@@ -10,7 +10,7 @@ actor LibraryDatabase {
 
     init(url: URL) throws {
         var db: OpaquePointer?
-        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK, let db else {
             if let db { sqlite3_close(db) }
             throw LibraryError.message("Could not open library database. Your files have been preserved.")
         }
@@ -20,10 +20,21 @@ actor LibraryDatabase {
         sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &statement, nil)
         let version = sqlite3_step(statement) == SQLITE_ROW ? sqlite3_column_int(statement, 0) : 0
         sqlite3_finalize(statement)
-        guard version <= 1 else {
+        guard version <= 2 else {
             sqlite3_close(db); connection = nil
             throw LibraryError.message("This library was created by a newer app. Install that version; the library has not been changed.")
         }
+        // A consistent pre-upgrade snapshot is kept alongside the index, never audio copies.
+        if version == 1 {
+            do { try Self.copyDatabase(db, to: url.deletingLastPathComponent().appendingPathComponent("library-before-v2-\(UUID().uuidString).sqlite")) }
+            catch { sqlite3_close(db); connection = nil; throw error }
+        }
+        let additions = version == 1 ? """
+        ALTER TABLE songs ADD COLUMN track_number INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE songs ADD COLUMN disc_number INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE songs ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0;
+        ALTER TABLE songs ADD COLUMN album_order INTEGER;
+        """ : ""
         let schema = """
         PRAGMA journal_mode=WAL;
         PRAGMA foreign_keys=ON;
@@ -33,17 +44,20 @@ actor LibraryDatabase {
           id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
           artist TEXT NOT NULL, album TEXT NOT NULL, genre TEXT NOT NULL,
           added REAL NOT NULL, played REAL, favourite INTEGER NOT NULL DEFAULT 0,
-          bytes INTEGER NOT NULL, payload BLOB NOT NULL
+          bytes INTEGER NOT NULL, payload BLOB NOT NULL,
+          track_number INTEGER NOT NULL DEFAULT 0, disc_number INTEGER NOT NULL DEFAULT 1,
+          duration_seconds REAL NOT NULL DEFAULT 0, album_order INTEGER
         );
+        \(additions)
         CREATE INDEX IF NOT EXISTS songs_title ON songs(title COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS songs_album ON songs(album COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS songs_artist ON songs(artist COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS songs_genre ON songs(genre COLLATE NOCASE);
         CREATE INDEX IF NOT EXISTS songs_added ON songs(added DESC);
         CREATE INDEX IF NOT EXISTS songs_played ON songs(played DESC);
+        CREATE INDEX IF NOT EXISTS songs_album_order ON songs(album,album_order,disc_number,track_number);
         CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value BLOB NOT NULL);
-        PRAGMA user_version=1;
-        COMMIT;
+        PRAGMA user_version=2;
         """
         guard sqlite3_exec(db, schema, nil, nil, nil) == SQLITE_OK else {
             let message = String(cString: sqlite3_errmsg(db))
@@ -51,9 +65,38 @@ actor LibraryDatabase {
             sqlite3_close(db); connection = nil
             throw LibraryError.message("Database migration failed: \(message). Nothing was reset.")
         }
+        do {
+            if version == 1 { try Self.indexAlbumPositions(db) }
+            guard sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw LibraryError.message(String(cString: sqlite3_errmsg(db))) }
+        } catch {
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil); sqlite3_close(db); connection = nil
+            throw LibraryError.message("Album index migration failed: \(error.localizedDescription). Your library was not reset.")
+        }
     }
 
     deinit { sqlite3_close(connection) }
+
+    private static func indexAlbumPositions(_ db: OpaquePointer) throws {
+        var read: OpaquePointer?, update: OpaquePointer?
+        defer { sqlite3_finalize(read); sqlite3_finalize(update) }
+        guard sqlite3_prepare_v2(db, "SELECT id,payload FROM songs", -1, &read, nil) == SQLITE_OK,
+              sqlite3_prepare_v2(db, "UPDATE songs SET track_number=?,disc_number=?,duration_seconds=? WHERE id=?", -1, &update, nil) == SQLITE_OK else {
+            throw LibraryError.message(String(cString: sqlite3_errmsg(db)))
+        }
+        let decoder = JSONDecoder()
+        while true {
+            let code = sqlite3_step(read)
+            if code == SQLITE_DONE { break }
+            guard code == SQLITE_ROW, let blob = sqlite3_column_blob(read, 1) else { throw LibraryError.message("Cannot read an existing song during migration.") }
+            let song = try decoder.decode(Song.self, from: Data(bytes: blob, count: Int(sqlite3_column_bytes(read, 1))))
+            sqlite3_reset(update); sqlite3_clear_bindings(update)
+            sqlite3_bind_int(update, 1, Int32(song.effectiveTrackNumber))
+            sqlite3_bind_int(update, 2, Int32(song.effectiveDiscNumber))
+            sqlite3_bind_double(update, 3, song.duration)
+            sqlite3_bind_text(update, 4, song.id, -1, transient)
+            guard sqlite3_step(update) == SQLITE_DONE else { throw LibraryError.message(String(cString: sqlite3_errmsg(db))) }
+        }
+    }
 
     private func prepare(_ sql: String, _ values: [String] = []) throws -> OpaquePointer {
         var statement: OpaquePointer?
@@ -74,17 +117,18 @@ actor LibraryDatabase {
     func save(_ song: Song) throws {
         let data = try encoder.encode(song)
         let statement = try prepare("""
-        INSERT INTO songs(id,fingerprint,title,artist,album,genre,added,played,favourite,bytes,payload)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+        INSERT INTO songs(id,fingerprint,title,artist,album,genre,added,played,favourite,bytes,track_number,disc_number,duration_seconds,payload)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
         fingerprint=excluded.fingerprint,title=excluded.title,artist=excluded.artist,album=excluded.album,
         genre=excluded.genre,added=excluded.added,played=excluded.played,favourite=excluded.favourite,
-        bytes=excluded.bytes,payload=excluded.payload
+        bytes=excluded.bytes,track_number=excluded.track_number,disc_number=excluded.disc_number,
+        duration_seconds=excluded.duration_seconds,payload=excluded.payload
         """, [song.id, song.fingerprint, song.title, song.artist, song.album, song.genre,
               String(song.addedAt.timeIntervalSince1970), song.lastPlayedAt.map { String($0.timeIntervalSince1970) } ?? "",
-              song.isFavourite ? "1" : "0", String(song.byteCount)])
+              song.isFavourite ? "1" : "0", String(song.byteCount), String(song.effectiveTrackNumber), String(song.effectiveDiscNumber), String(song.duration)])
         defer { sqlite3_finalize(statement) }
         if song.lastPlayedAt == nil { sqlite3_bind_null(statement, 8) }
-        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 11, $0.baseAddress, Int32(data.count), Self.transient) }
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 14, $0.baseAddress, Int32(data.count), Self.transient) }
         guard sqlite3_step(statement) == SQLITE_DONE else { throw error() }
     }
 
@@ -114,12 +158,7 @@ actor LibraryDatabase {
     func songs(search: String = "", sort: LibrarySort = .title, favourite: Bool = false,
                group: LibraryGroup? = nil, value: String? = nil, limit: Int = 150, offset: Int = 0) throws -> [Song] {
         let filter = filters(search: search, favourite: favourite, group: group, value: value)
-        let order: String
-        switch sort {
-        case .title: order = "title COLLATE NOCASE, id"
-        case .added: order = "added DESC, id"
-        case .played: order = "played DESC, id"
-        }
+        let order = ordering(sort, group: group)
         let sql = "SELECT payload FROM songs WHERE \(filter.0) ORDER BY \(order) LIMIT ? OFFSET ?"
         let statement = try prepare(sql, filter.1 + [String(limit), String(offset)])
         defer { sqlite3_finalize(statement) }
@@ -132,6 +171,42 @@ actor LibraryDatabase {
         }
         return result
     }
+
+    private func ordering(_ sort: LibrarySort, group: LibraryGroup?) -> String {
+        if sort == .albumTrack || (sort == .title && group == .album) {
+            return "(album_order IS NULL),album_order,disc_number,(track_number=0),track_number,title COLLATE NOCASE,id"
+        }
+        switch sort {
+        case .title, .albumTrack: return "title COLLATE NOCASE,id"
+        case .added: return "added DESC,id"
+        case .played: return "played DESC,id"
+        }
+    }
+
+    func albumSummary(_ name: String) throws -> AlbumSummary {
+        let statement = try prepare("SELECT COUNT(*),COALESCE(SUM(duration_seconds),0),COUNT(DISTINCT artist),MIN(artist),COALESCE(MAX(album_order IS NOT NULL),0),COALESCE(MAX(disc_number),1) FROM songs WHERE album=?", [name])
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw error() }
+        let artist = sqlite3_column_text(statement, 3).map { String(cString: $0) } ?? "Unknown artist"
+        return AlbumSummary(count: Int(sqlite3_column_int(statement, 0)), duration: sqlite3_column_double(statement, 1),
+                            artist: sqlite3_column_int(statement, 2) > 1 ? "Various artists" : artist,
+                            hasCustomOrder: sqlite3_column_int(statement, 4) != 0, maxDisc: Int(sqlite3_column_int(statement, 5)))
+    }
+
+    func setAlbumOrder(_ name: String, songIDs: [String]) throws {
+        let current = try allIDs(group: .album, value: name)
+        guard Set(current) == Set(songIDs), songIDs.count == current.count, Set(songIDs).count == songIDs.count else {
+            throw LibraryError.message("This album changed while you were editing it. Reopen Reorder tracks and try again.")
+        }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("UPDATE songs SET album_order=NULL WHERE album=?", [name])
+            for (index, id) in songIDs.enumerated() { try execute("UPDATE songs SET album_order=? WHERE id=? AND album=?", [String(index), id, name]) }
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+
+    func resetAlbumOrder(_ name: String) throws { try execute("UPDATE songs SET album_order=NULL WHERE album=?", [name]) }
 
     private func filters(search: String, favourite: Bool, group: LibraryGroup?, value: String?) -> (String, [String]) {
         var clauses = ["1=1"]
@@ -148,7 +223,7 @@ actor LibraryDatabase {
 
     func allIDs(search: String = "", favourite: Bool = false, group: LibraryGroup? = nil, value: String? = nil, sort: LibrarySort = .title) throws -> [String] {
         let filter = filters(search: search, favourite: favourite, group: group, value: value)
-        let order = sort == .title ? "title COLLATE NOCASE, id" : (sort == .added ? "added DESC, id" : "played DESC, id")
+        let order = ordering(sort, group: group)
         let statement = try prepare("SELECT id FROM songs WHERE \(filter.0) ORDER BY \(order)", filter.1)
         defer { sqlite3_finalize(statement) }
         var ids: [String] = []
@@ -227,13 +302,18 @@ actor LibraryDatabase {
 
     /// SQLite's online backup API produces a consistent snapshot, including WAL contents.
     func backup(to url: URL) throws {
+        guard let connection else { throw LibraryError.message("The library is closed.") }
+        try Self.copyDatabase(connection, to: url)
+    }
+
+    private static func copyDatabase(_ source: OpaquePointer, to url: URL) throws {
         var destination: OpaquePointer?
         guard sqlite3_open(url.path, &destination) == SQLITE_OK, let destination else {
             if let destination { sqlite3_close(destination) }
             throw LibraryError.message("Could not open backup destination.")
         }
         defer { sqlite3_close(destination) }
-        guard let backup = sqlite3_backup_init(destination, "main", connection, "main") else { throw error() }
+        guard let backup = sqlite3_backup_init(destination, "main", source, "main") else { throw LibraryError.message(String(cString: sqlite3_errmsg(destination))) }
         let result = sqlite3_backup_step(backup, -1)
         let finish = sqlite3_backup_finish(backup)
         guard result == SQLITE_DONE, finish == SQLITE_OK else { throw LibraryError.message("Could not create a consistent database backup.") }

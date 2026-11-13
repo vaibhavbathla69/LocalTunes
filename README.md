@@ -2,6 +2,14 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.2 — album pages and correct track order
+
+Tap the album name at the top of Now Playing, or open Library → Albums → an album, to see its artwork, artist, duration and complete numbered track list. Album Play and tapping a track build a queue for that album in disc/track-number order and turn shuffle off; Shuffle remains a separate action.
+
+Albums use embedded disc and track tags, with a conservative filename fallback such as `01 - Song` or `2-03 Song`. Unnumbered tracks follow numbered tracks on their disc. If tags are missing or wrong, open the album's **Reorder tracks** control, drag the handles and **Save**. This saves a local custom order without rewriting audio. Album options can restore disc/track order or reread position tags from existing imported files. A saved order takes effect when you next play the album; existing queues are preserved until you start a new one.
+
+The index migrates transactionally from schema 1 to 2 and keeps a consistent `LibraryData/library-before-v2-<UUID>.sqlite` snapshot before upgrading. Imported files, favourites, playlists and playback state are preserved. Older app versions cannot open a schema-2 index; keep this version or newer after upgrading.
+
 ### Version 1.1 — artwork comes first
 
 Home has a visible search shortcut, spotlight card and artwork shelves. Search is the second tab and always shows a text field; Library also has its own visible filter. Home, Search, Library and Playlists are the four tabs; Settings is the gear button on Home or Library. The floating mini-player sits above the tabs, so navigation stays accessible during playback.
@@ -76,7 +84,7 @@ Audio files are local and deliberately excluded from automatic iCloud device bac
 2. Copy `LibraryIndex-backup.sqlite`, the entire `Music` folder, and `LibraryData/Artwork` and `LibraryData/Lyrics` to your computer using Files/USB file sharing. Keep their relative paths. The snapshot contains songs, favourites, playlists and queue state; audio and lyric/artwork files are separate. The auto-follow preference is a device UserDefaults setting rather than part of the index snapshot.
 3. To restore, back up the target installation first and force-close LocalTunes. Replace `Music`, `LibraryData/Artwork`, and `LibraryData/Lyrics` with the backup copies. Put a copy of `LibraryIndex-backup.sqlite` into `LibraryData` named **library.sqlite**. Remove that target's old `library.sqlite-wal` and `library.sqlite-shm` **only while the app is closed and after backing up the target**; they belong to the old database. Launch the app. If your file-sharing tool cannot manipulate nested folders, assemble and replace the entire LibraryData folder on the PC while the app is closed. Do not restore while the app is running.
 
-Schema version 1 is created transactionally. Unknown newer schemas produce a recovery message; the app never destroys/recreates a database on migration failure. Settings can check for missing audio without removing entries. Reimporting a byte-identical original repairs a missing managed file. Crash-interrupted staging/orphan files are not automatically deleted; back up first before manual cleanup. If metadata is intact, unindexed audio can be recovered by selecting its managed file for reimport, then removing the old orphan after verifying the new copy. Never manually rename managed files without updating the index.
+Schema version 2 is created transactionally. Unknown newer schemas produce a recovery message; the app never destroys/recreates a database on migration failure. Settings can check for missing audio without removing entries. Reimporting a byte-identical original repairs a missing managed file. Crash-interrupted staging/orphan files are not automatically deleted; back up first before manual cleanup. If metadata is intact, unindexed audio can be recovered by selecting its managed file for reimport, then removing the old orphan after verifying the new copy. Never manually rename managed files without updating the index.
 
 ## Develop in VS Code on Windows
 

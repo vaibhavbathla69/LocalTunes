@@ -53,6 +53,26 @@ final class PlaybackTests: XCTestCase {
     }
 
     @MainActor
+    func testAlbumPlayUsesNumericOrderAndTurnsOffPreviousShuffle() async throws {
+        let (root, paths, db, original) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var first = original
+        first.id = "first"; first.fingerprint = "first"; first.album = "Ordered album"; first.title = "Zulu"; first.trackNumber = 1
+        var second = original
+        second.id = "second"; second.fingerprint = "second"; second.album = "Ordered album"; second.title = "Alpha"; second.trackNumber = 2
+        try await db.save(second); try await db.save(first)
+        let model = LibraryModel(paths: paths, db: db)
+        await model.player.toggleShuffle()
+        XCTAssertTrue(model.player.queue.shuffle)
+        await model.playAlbum("Ordered album")
+        XCTAssertFalse(model.player.queue.shuffle)
+        XCTAssertEqual(model.player.queue.entries.map(\.songID), ["first", "second"])
+        XCTAssertEqual(model.player.currentSong?.id, "first")
+        XCTAssertNil(model.player.errorMessage)
+        model.player.pause()
+    }
+
+    @MainActor
     private func waitUntil(_ condition: () -> Bool) async -> Bool {
         for _ in 0..<100 {
             if condition() { return true }

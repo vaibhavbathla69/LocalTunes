@@ -61,13 +61,17 @@ struct SongRow: View {
     @EnvironmentObject private var library: LibraryModel
     @EnvironmentObject private var player: PlaybackService
     let song: Song
+    var positionLabel: String? = nil
+    var accessibilityID: String? = nil
     var action: () -> Void
     @State private var deleting = false
     @State private var choosingPlaylist = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 13) {
-                ArtworkView(song: song)
+                if let positionLabel {
+                    Text(positionLabel).font(.subheadline.monospacedDigit()).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.65).frame(width: 34)
+                } else { ArtworkView(song: song) }
                 VStack(alignment: .leading, spacing: 5) {
                     Text(song.title).font(.body.weight(.medium)).foregroundStyle(player.currentSong?.id == song.id ? Palette.accent : .white).lineLimit(1)
                     Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -79,7 +83,7 @@ struct SongRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(song.title), \(song.artist), \(song.duration.clock)")
-        .accessibilityIdentifier("song.\(song.title)")
+        .accessibilityIdentifier(accessibilityID ?? "song.\(song.title)")
         .contextMenu {
             Button("Play", systemImage: "play.fill", action: action)
             Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { Task { await player.append(song.id, next: true) } }

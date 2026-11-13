@@ -263,14 +263,17 @@ private struct GroupCard: View {
     let kind: LibraryGroup
     @State private var representative: Song?
     var body: some View {
-        NavigationLink { SongListView(title: group.name, group: kind, groupValue: group.name) } label: {
+        NavigationLink {
+            if kind == .album { AlbumDetailView(albumName: group.name) }
+            else { SongListView(title: group.name, group: kind, groupValue: group.name) }
+        } label: {
             VStack(alignment: .leading, spacing: 10) {
                 GeometryReader { proxy in
                     CollectionCover(song: representative, symbol: kind == .artist ? "person.fill" : "square.stack.fill", size: proxy.size.width, seed: group.name)
                         .clipShape(RoundedRectangle(cornerRadius: kind == .artist ? proxy.size.width / 2 : 12))
                 }.aspectRatio(1, contentMode: .fit)
                 Text(group.name).font(.subheadline.bold()).lineLimit(2)
-                Text("\(group.count) songs").font(.caption).foregroundStyle(Palette.muted)
+                Text("\(group.count) \(group.count == 1 ? "song" : "songs")").font(.caption).foregroundStyle(Palette.muted)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(.plain).accessibilityIdentifier("collection.\(kind.rawValue).\(group.name)")
             .task(id: group.id) {

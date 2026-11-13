@@ -94,6 +94,41 @@ final class NavigationTests: XCTestCase {
     }
 
     @MainActor
+    func testAlbumPageFromLibraryAndNowPlayingUsesTrackOrder() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio", "--ui-test-seed-album"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["Albums"].tap()
+        let album = app.buttons["collection.album.After Hours"]
+        XCTAssertTrue(album.waitForExistence(timeout: 5))
+        album.tap()
+        let first = app.buttons["album.track.CI Zulu opener"]
+        let second = app.buttons["album.track.CI reference tone"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertTrue(second.exists)
+        XCTAssertLessThan(first.frame.minY, second.frame.minY, "Track 1 must precede track 2 even when its title sorts later.")
+        capture(app, name: "15-AlbumPage")
+        app.buttons["album.play"].tap()
+        XCTAssertTrue(app.buttons["miniPlayer"].waitForExistence(timeout: 5))
+        app.buttons["miniPlayer"].tap()
+        XCTAssertTrue(app.staticTexts["nowPlaying.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["nowPlaying.title"].label, "CI Zulu opener")
+        app.buttons["nowPlaying.album"].tap()
+        XCTAssertTrue(app.buttons["player.album.reorder"].waitForExistence(timeout: 5))
+        capture(app, name: "16-AlbumFromPlayer")
+        app.buttons["player.album.reorder"].tap()
+        XCTAssertTrue(app.buttons["album.order.save"].waitForExistence(timeout: 5))
+        capture(app, name: "17-ReorderAlbum")
+        app.buttons["album.order.cancel"].tap()
+        app.buttons["album.done"].tap()
+        app.buttons["nowPlaying.next"].tap()
+        let nextTrack = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'CI reference tone'"), object: app.staticTexts["nowPlaying.title"])
+        XCTAssertEqual(XCTWaiter.wait(for: [nextTrack], timeout: 5), .completed)
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

@@ -10,16 +10,19 @@ struct NowPlayingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lyrics = false
     @State private var queue = false
+    @State private var album: AlbumDestination?
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
                 ScrollView {
                     if let song = player.currentSong {
                         VStack(spacing: 22) {
-                            VStack(spacing: 5) {
-                                Text("PLAYING FROM YOUR COLLECTION").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(.white.opacity(0.6))
-                                Text(song.album).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            }
+                            Button { album = AlbumDestination(name: song.album) } label: {
+                                VStack(spacing: 7) {
+                                    Text("VIEW ALBUM").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(.white.opacity(0.6))
+                                    HStack(spacing: 7) { Text(song.album).lineLimit(1); Image(systemName: "chevron.right").font(.caption2.bold()) }.font(.subheadline.weight(.semibold))
+                                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                            }.buttonStyle(.plain).accessibilityLabel("Open album \(song.album)").accessibilityIdentifier("nowPlaying.album")
                             ArtworkView(song: song, size: max(130, min(350, min(proxy.size.width - 52, proxy.size.height * 0.39))), fullSize: true, cornerRadius: 12)
                                 .shadow(color: .black.opacity(0.35), radius: 28, y: 16)
                                 .scaleEffect(player.isPlaying ? 1 : 0.96)
@@ -48,7 +51,10 @@ struct NowPlayingView: View {
                 ToolbarItem(placement: .principal) { Text("NOW PLAYING").font(.caption.weight(.bold)).tracking(2) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        if let song = player.currentSong { Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } } }
+                        if let song = player.currentSong {
+                            Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
+                            Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
+                        }
                         Button("Your queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
                     } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Now Playing options")
@@ -56,6 +62,12 @@ struct NowPlayingView: View {
             }
             .sheet(isPresented: $lyrics) { LyricsView() }
             .sheet(isPresented: $queue) { QueueView() }
+            .sheet(item: $album) { destination in
+                NavigationStack {
+                    AlbumDetailView(albumName: destination.name, accessibilityPrefix: "player.album")
+                        .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Done") { album = nil }.accessibilityIdentifier("album.done") } }
+                }
+            }
         }.tint(.white).preferredColorScheme(.dark)
     }
 

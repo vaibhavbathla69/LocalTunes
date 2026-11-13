@@ -102,6 +102,33 @@ final class LibraryModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func playAlbum(_ name: String, startingAt id: String? = nil, shuffled: Bool = false) async {
+        do {
+            var ids = try await db.allIDs(group: .album, value: name, sort: .albumTrack)
+            if shuffled { ids.shuffle() }
+            await player.play(ids: ids, startingAt: id, shuffled: shuffled)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func refreshAlbumPositions(_ name: String) async throws -> [String] {
+        let ids = try await db.allIDs(group: .album, value: name)
+        var failures: [String] = []
+        for id in ids {
+            guard let indexed = try await db.song(id) else { continue }
+            do {
+                let position = try await MetadataExtractor.readPosition(paths.audioURL(for: indexed), filename: indexed.originalFilename)
+                // Read the newest row after suspension, preserving favourite/history changes.
+                guard var current = try await db.song(id) else { continue }
+                if let track = position.track { current.trackNumber = track }
+                if let disc = position.disc { current.discNumber = disc }
+                try await db.save(current)
+                player.refreshSong(current)
+            } catch { failures.append("\(indexed.title): \(error.localizedDescription)") }
+        }
+        revision += 1
+        return failures
+    }
+
     func savePlaylists(_ values: [Playlist]) async {
         do { try await db.setState("playlists", value: values); playlists = values; revision += 1 }
         catch { errorMessage = error.localizedDescription }

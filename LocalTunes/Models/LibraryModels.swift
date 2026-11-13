@@ -16,6 +16,10 @@ struct Song: Identifiable, Codable, Hashable, Sendable {
     var addedAt: Date
     var lastPlayedAt: Date?
     var isFavourite: Bool = false
+    var discNumber: Int? = nil
+
+    var effectiveTrackNumber: Int { trackNumber > 0 ? min(65535, trackNumber) : (AlbumPosition.filename(originalFilename).track ?? 0) }
+    var effectiveDiscNumber: Int { min(65535, max(1, discNumber ?? AlbumPosition.filename(originalFilename).disc ?? 1)) }
 
     static func text(_ value: String?, fallback: String) -> String {
         let clean = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -118,11 +122,24 @@ struct PlaybackQueue: Codable, Equatable, Sendable {
     }
 }
 
-enum LibrarySort: String, CaseIterable, Sendable { case title, added, played }
+enum LibrarySort: String, CaseIterable, Sendable { case title, added, played, albumTrack }
 enum LibraryGroup: String, CaseIterable, Sendable { case album, artist, genre }
 struct GroupSummary: Identifiable, Sendable {
     var name: String
     var count: Int
+    var id: String { name }
+}
+
+struct AlbumSummary: Sendable {
+    var count: Int
+    var duration: Double
+    var artist: String
+    var hasCustomOrder: Bool
+    var maxDisc: Int
+}
+
+struct AlbumDestination: Identifiable {
+    var name: String
     var id: String { name }
 }
 
