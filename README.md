@@ -2,6 +2,10 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.4.1 ? pixel branding
+
+A lime pixel vinyl/play mark replaces the waveform app icon and appears in Settings. The opaque square source, generation prompt and export instructions are in `branding/`. Re-export assets with `python scripts/make_icon.py` (Pillow is development-only).
+
 ### Version 1.4 — album Home, swipe to queue, and artist credits
 
 Home now defaults to Recently played albums → Most played albums → Most played songs → Stats → Recently added. Album shelves open the full album page. Album popularity sums counted track plays; recency uses the last playback date of any track in the album. Stats and ranks refresh while Home is active. Liked-song/playlist shortcuts and the spotlight are removed. Older saved Home layouts migrate to this order; new section visibility/reordering remains customizable, and explicitly pinned items can still be added.
@@ -137,7 +141,7 @@ git push origin main
 
 If starting from an empty GitHub repository in another workspace, use `git init -b main`, `git add .`, `git commit -m "Initial app"`, `git remote add origin YOUR_REPOSITORY_URL`, then `git push -u origin main`. Never add personal audio, credentials, private keys, profiles or certificates. `.gitignore` excludes common audio and signing files; review staged changes before committing.
 
-Set the display name and bundle identifier in **Config/App.xcconfig** before the first installation. Keep the identifier unchanged for updates. The target/scheme and IPA filename remain LocalTunes even if you change the display name. Version/build are in `project.yml`. Xcode projects are generated and ignored; edit XcodeGen configuration, not generated files. The simple waveform icon can be regenerated with `python -m pip install Pillow` and `python scripts/make_icon.py`; Pillow is development-only, not an app dependency.
+Set the display name and bundle identifier in **Config/App.xcconfig** before the first installation. Keep the identifier unchanged for updates. The target/scheme and IPA filename remain LocalTunes even if you change the display name. Version/build are in `project.yml`. Xcode projects are generated and ignored; edit XcodeGen configuration, not generated files. The pixel icon and Settings brand mark can be exported from the selected artwork with `python -m pip install Pillow` and `python scripts/make_icon.py`; Pillow is development-only, not an app dependency. See `branding/README.md` for the original generation prompt.
 
 ```text
 Config/                     Display name, bundle ID, Info.plist/background/file sharing

@@ -12,7 +12,11 @@ struct SettingsView: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "waveform").font(.largeTitle).foregroundStyle(Palette.accent)
+                    Image("BrandMark")
+                        .resizable().interpolation(.none).scaledToFit()
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityHidden(true)
                     Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LocalTunes").font(.title.bold())
                 }.padding(.vertical, 12)
             }
