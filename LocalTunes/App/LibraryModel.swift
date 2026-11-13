@@ -2,6 +2,8 @@ import SwiftUI
 import Combine
 import OSLog
 
+enum AppTab: Hashable { case home, search, library, playlists }
+
 @MainActor
 final class LibraryModel: ObservableObject {
     let paths: LibraryPaths
@@ -10,6 +12,8 @@ final class LibraryModel: ObservableObject {
     private let importer: ImportService
     private var importTask: Task<Void, Never>?
     @Published var revision = 0
+    @Published var selectedTab: AppTab = .home
+    @Published var searchFocusRequest = 0
     @Published var playlists: [Playlist] = []
     @Published var songCount = 0
     @Published var musicBytes: Int64 = 0
@@ -55,6 +59,7 @@ final class LibraryModel: ObservableObject {
     }
 
     func cancelImport() { importTask?.cancel() }
+    func openSearch() { selectedTab = .search; searchFocusRequest += 1 }
     private func receiveProgress(_ update: ImportProgress) { progress = update }
     func scanInbox() { importURLs([paths.inbox]) }
 

@@ -1,5 +1,8 @@
 #if DEBUG
 import Foundation
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Synthetic test input goes through the real importer. This code is absent from Release.
 enum UITestSupport {
@@ -21,6 +24,39 @@ enum UITestSupport {
         }
         await ImportService(db: db, paths: paths).run([source]) { _ in }
         guard try await db.statistics().count == 2 else { throw LibraryError.message("CI test input import failed.") }
+        // Generated artwork exercises warm/cool palette transitions in simulator screenshots.
+        for var song in try await db.songs() {
+            let warm = song.originalFilename.contains("reference")
+            song.artist = "LocalTunes Studio"
+            song.album = warm ? "After Hours" : "Blue Hour"
+            song.genre = "Electronic"
+            song.artworkPath = try MetadataExtractor.writeArtwork(cover(warm: warm), id: song.id, paths: paths)
+            try await db.save(song)
+        }
+    }
+
+    private static func cover(warm: Bool) throws -> Data {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(data: nil, width: 800, height: 800, bitsPerComponent: 8, bytesPerRow: 3200,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            throw LibraryError.message("Could not create CI artwork.")
+        }
+        let colors = warm ? [CGColor(red: 0.98, green: 0.32, blue: 0.12, alpha: 1), CGColor(red: 0.38, green: 0.025, blue: 0.24, alpha: 1)]
+                          : [CGColor(red: 0.05, green: 0.7, blue: 0.88, alpha: 1), CGColor(red: 0.1, green: 0.07, blue: 0.48, alpha: 1)]
+        if let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: [0, 1]) {
+            context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 800, y: 800), options: [])
+        }
+        context.setFillColor(CGColor(red: 1, green: 0.83, blue: 0.6, alpha: 0.85))
+        context.fillEllipse(in: CGRect(x: 200, y: 220, width: 400, height: 400))
+        context.setBlendMode(.multiply)
+        context.setFillColor(colors[1])
+        for row in 0..<12 { context.fill(CGRect(x: 0, y: 100 + row * 49, width: 800, height: 16)) }
+        guard let image = context.makeImage() else { throw LibraryError.message("Could not render CI artwork.") }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { throw LibraryError.message("Could not encode CI artwork.") }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw LibraryError.message("Could not finish CI artwork.") }
+        return data as Data
     }
 }
 #endif

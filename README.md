@@ -2,6 +2,14 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.1 — artwork comes first
+
+Home has a visible search shortcut, spotlight card and artwork shelves. Search is the second tab and always shows a text field; Library also has its own visible filter. Home, Search, Library and Playlists are the four tabs; Settings is the gear button on Home or Library. The floating mini-player sits above the tabs, so navigation stays accessible during playback.
+
+Now Playing, Lyrics, collection headers and the mini-player use gradients extracted from album artwork. Colors are sampled from a tiny thumbnail on a background actor and cached; gradients animate between tracks and respect Reduce Motion. Missing covers get stable album-specific palettes. Albums and artists use an artwork grid, and playlists have illustrated covers and collection headers. All themes work offline.
+
+Install the new IPA over the existing app with the same Sideloadly account and identifier settings. Version 1.1 keeps the same bundle ID and library schema.
+
 **An unsigned IPA cannot be installed directly. Sideloadly must sign it with your Apple Account first.** A free account normally means a seven-day signing period. The player works offline after installation; building, initial signing and refreshing require an internet connection. Keep original music and backups.
 
 ## Get the app from GitHub on Windows

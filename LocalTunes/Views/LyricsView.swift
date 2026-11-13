@@ -17,7 +17,7 @@ struct LyricsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Palette.background.ignoresSafeArea()
+                ArtworkBackdrop(song: player.currentSong, strength: 0.9).ignoresSafeArea()
                 if let song = player.currentSong {
                     if raw.isEmpty {
                         ContentUnavailableView {
@@ -35,7 +35,7 @@ struct LyricsView: View {
                                         Button { player.seek(line.time); following = true } label: {
                                             Text(line.text.isEmpty ? "•••" : line.text)
                                                 .font(.system(.title, design: .rounded, weight: .bold))
-                                                .foregroundStyle(active == line.id ? .white : .white.opacity(0.35))
+                                                .foregroundStyle(active == line.id ? .white : .white.opacity(0.52))
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .contentShape(Rectangle())
                                         }.buttonStyle(.plain).id(line.id).accessibilityLabel("\(line.text), seek to \(line.time.clock)")
@@ -60,6 +60,7 @@ struct LyricsView: View {
                 } else { ContentUnavailableView("Play a song to see lyrics", systemImage: "quote.bubble") }
             }
             .navigationTitle(player.currentSong?.title ?? "Lyrics").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {

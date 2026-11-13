@@ -3,9 +3,10 @@ import UIKit
 import Combine
 
 enum Palette {
-    static let background = Color(red: 0.035, green: 0.050, blue: 0.058)
-    static let surface = Color(red: 0.08, green: 0.10, blue: 0.11)
-    static let accent = Color(red: 0.68, green: 0.97, blue: 0.43)
+    static let background = Color(red: 0.045, green: 0.05, blue: 0.06)
+    static let surface = Color(red: 0.1, green: 0.11, blue: 0.13)
+    static let accent = Color(red: 0.70, green: 0.98, blue: 0.36)
+    static let muted = Color.white.opacity(0.62)
 }
 
 actor ArtworkLoader {
@@ -26,6 +27,7 @@ struct ArtworkView: View {
     var song: Song?
     var size: CGFloat = 52
     var fullSize = false
+    var cornerRadius: CGFloat? = nil
     @State private var image: UIImage?
 
     var body: some View {
@@ -35,13 +37,15 @@ struct ArtworkView: View {
             else { Image(systemName: "waveform").font(.system(size: max(18, size * 0.25), weight: .light)).foregroundStyle(Palette.accent.opacity(0.7)) }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size > 100 ? 18 : 9))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? (size > 100 ? 14 : 7)))
         .accessibilityHidden(true)
         .task(id: "\(song?.id ?? "")-\(fullSize)") {
             image = nil
             guard let path = song?.artworkPath else { return }
             let url = library.paths.documents.appendingPathComponent(fullSize ? path : path.replacingOccurrences(of: ".jpg", with: ".thumb.jpg"))
-            image = await ArtworkLoader.shared.image(url)
+            let loaded = await ArtworkLoader.shared.image(url)
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }

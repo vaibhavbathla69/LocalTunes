@@ -7,49 +7,18 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var nowPlaying = false
     var body: some View {
-        TabView {
-            NavigationStack { HomeView() }.tabItem { Label("Home", systemImage: "house.fill") }
-            NavigationStack { LibraryView() }.tabItem { Label("Library", systemImage: "square.stack.fill") }
-            NavigationStack { SearchView() }.tabItem { Label("Search", systemImage: "magnifyingglass") }
-            NavigationStack { PlaylistsView() }.tabItem { Label("Playlists", systemImage: "music.note.list") }
-            NavigationStack { SettingsView() }.tabItem { Label("Settings", systemImage: "gearshape.fill") }
+        TabView(selection: $library.selectedTab) {
+            NavigationStack { HomeView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Home", systemImage: "house.fill") }.tag(AppTab.home)
+            NavigationStack { SearchView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(AppTab.search)
+            NavigationStack { LibraryView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Library", systemImage: "square.stack.fill") }.tag(AppTab.library)
+            NavigationStack { PlaylistsView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Playlists", systemImage: "music.note.list") }.tag(AppTab.playlists)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if library.isImporting, let progress = library.progress {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(progress.filename).font(.caption).lineLimit(1)
-                            ProgressView(value: Double(progress.completed) + progress.fileFraction, total: Double(max(1, progress.total)))
-                        }
-                        Button("Cancel") { library.cancelImport() }.font(.caption)
-                    }.padding(12).background(Palette.surface)
-                }
-                if let song = player.currentSong {
-                    HStack(spacing: 12) {
-                        Button { nowPlaying = true } label: {
-                            HStack {
-                                ArtworkView(song: song, size: 42)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(song.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                    Text(song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
-                            }.contentShape(Rectangle())
-                        }.buttonStyle(.plain).accessibilityLabel("Open Now Playing: \(song.title)")
-                            .accessibilityIdentifier("miniPlayer")
-                        Button { Task { await player.toggle() } } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44) }
-                            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-                        Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").frame(width: 44, height: 44) }.accessibilityLabel("Next song")
-                    }.padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
-                        .overlay(alignment: .topLeading) {
-                            GeometryReader { proxy in
-                                Rectangle().fill(Palette.accent).frame(width: proxy.size.width * min(1, player.duration > 0 ? player.position / player.duration : 0), height: 2)
-                            }.frame(height: 2)
-                        }
-                }
-            }
-        }
+        .toolbarBackground(Palette.background.opacity(0.95), for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .fullScreenCover(isPresented: $nowPlaying) { NowPlayingView() }
         .fileImporter(isPresented: $library.importFiles, allowedContentTypes: [.audio, UTType(filenameExtension: "lrc") ?? .plainText, .plainText], allowsMultipleSelection: true) { result in handleImport(result) }
         .fileImporter(isPresented: $library.importFolder, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in handleImport(result) }
@@ -70,6 +39,49 @@ struct RootView: View {
         case .success(let urls): library.importURLs(urls)
         case .failure(let error): library.errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct PlayerDock: View {
+    @EnvironmentObject private var library: LibraryModel
+    @EnvironmentObject private var player: PlaybackService
+    @Binding var showNowPlaying: Bool
+    var body: some View {
+        VStack(spacing: 8) {
+            if library.isImporting, let progress = library.progress {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(progress.filename).font(.caption.weight(.medium)).lineLimit(1)
+                        ProgressView(value: Double(progress.completed) + progress.fileFraction, total: Double(max(1, progress.total))).tint(Palette.accent)
+                    }
+                    Button { library.cancelImport() } label: { Image(systemName: "xmark").frame(width: 36, height: 36) }.accessibilityLabel("Cancel import")
+                }.padding(12).background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+            }
+            if let song = player.currentSong {
+                HStack(spacing: 6) {
+                    Button { showNowPlaying = true } label: {
+                        HStack(spacing: 12) {
+                            ArtworkView(song: song, size: 44)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(song.title).font(.subheadline.bold()).lineLimit(1)
+                                Text(song.artist).font(.caption).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel("Open Now Playing: \(song.title)").accessibilityIdentifier("miniPlayer")
+                    Button { Task { await player.toggle() } } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.title3).frame(width: 44, height: 48) }.accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                    Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").frame(width: 40, height: 48) }.accessibilityLabel("Next song")
+                }.padding(.horizontal, 9).padding(.vertical, 9).padding(.bottom, 2)
+                    .background { ArtworkBackdrop(song: song, strength: 0.75) }
+                    .overlay(alignment: .bottom) {
+                        GeometryReader { proxy in
+                            Capsule().fill(.white.opacity(0.18))
+                            Capsule().fill(.white).frame(width: proxy.size.width * min(1, max(0, player.duration > 0 ? player.position / player.duration : 0)))
+                        }.frame(height: 2).padding(.horizontal, 10).padding(.bottom, 4)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.09), lineWidth: 1))
+            }
+        }.padding(.horizontal, 8).padding(.bottom, player.currentSong != nil || library.isImporting ? 7 : 0)
     }
 }
 

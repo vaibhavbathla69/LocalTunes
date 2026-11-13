@@ -6,14 +6,20 @@ struct PlaylistsView: View {
     @State private var name = ""
     var body: some View {
         List {
-            NavigationLink { SongListView(title: "Favourites", favourite: true) } label: { Label("Favourites", systemImage: "heart.fill").foregroundStyle(Palette.accent).padding(.vertical, 12) }.listRowBackground(Color.clear)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("A mix for every version of you.").font(.title2.bold())
+                Text("\(library.playlists.count) playlists • all on your iPhone").font(.subheadline).foregroundStyle(Palette.muted)
+            }.padding(.vertical, 12).listRowBackground(Color.clear).listRowSeparator(.hidden)
+            NavigationLink { SongListView(title: "Liked songs", favourite: true) } label: {
+                HStack(spacing: 16) {
+                    CollectionCover(symbol: "heart.fill", size: 70, seed: "Liked songs")
+                    VStack(alignment: .leading, spacing: 6) { Text("Liked songs").font(.headline); Text("Your favourites, together").font(.caption).foregroundStyle(Palette.muted) }
+                }.padding(.vertical, 6)
+            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             ForEach(library.playlists) { playlist in
                 NavigationLink { PlaylistDetailView(playlistID: playlist.id) } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "music.note.list").font(.title).foregroundStyle(Palette.accent).frame(width: 50, height: 60).background(Palette.surface, in: RoundedRectangle(cornerRadius: 10))
-                        VStack(alignment: .leading, spacing: 5) { Text(playlist.name).font(.headline); Text("\(playlist.songIDs.count) songs").font(.subheadline).foregroundStyle(.secondary) }
-                    }
-                }.listRowBackground(Color.clear)
+                    PlaylistLibraryRow(playlist: playlist)
+                }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             }.onMove { from, to in
                 var values = library.playlists; values.move(fromOffsets: from, toOffset: to)
                 Task { await library.savePlaylists(values) }
@@ -37,14 +43,16 @@ struct PlaylistDetailView: View {
     private var playlist: Playlist? { library.playlists.first { $0.id == playlistID } }
     var body: some View {
         List {
+            CollectionHeader(title: playlist?.name ?? "Playlist", subtitle: "\(playlist?.songIDs.count ?? 0) songs • Curated by you", song: songs.first)
+                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let playlist {
                 HStack {
-                    Button { Task { await player.play(ids: playlist.songIDs) } } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                    Button { Task { await player.play(ids: playlist.songIDs.shuffled()) } } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                }.listRowBackground(Color.clear)
+                    Button { Task { await player.play(ids: playlist.songIDs) } } label: { Label("Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.background)
+                    Button { Task { await player.play(ids: playlist.songIDs.shuffled()) } } label: { Label("Shuffle", systemImage: "shuffle").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.bordered).tint(.white)
+                }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
             ForEach(songs) { song in
-                SongRow(song: song) { Task { await player.play(ids: playlist?.songIDs ?? [], startingAt: song.id) } }.listRowBackground(Color.clear)
+                SongRow(song: song) { Task { await player.play(ids: playlist?.songIDs ?? [], startingAt: song.id) } }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             }.onDelete { offsets in
                 var values = library.playlists
                 guard let index = values.firstIndex(where: { $0.id == playlistID }) else { return }
@@ -59,7 +67,7 @@ struct PlaylistDetailView: View {
                 Task { await library.savePlaylists(values) }
             }
             Button("Add songs", systemImage: "plus") { adding = true }.listRowBackground(Color.clear)
-        }.listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background).navigationTitle(playlist?.name ?? "Playlist")
+        }.listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background).navigationTitle(playlist?.name ?? "Playlist").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 EditButton()
                 Menu {
@@ -87,6 +95,24 @@ struct PlaylistDetailView: View {
                 Button("Delete playlist", role: .destructive) { Task { await library.savePlaylists(library.playlists.filter { $0.id != playlistID }); dismiss() } }
             }
             .sheet(isPresented: $adding) { PlaylistSongPicker(playlistID: playlistID) }
+    }
+}
+
+private struct PlaylistLibraryRow: View {
+    @EnvironmentObject private var library: LibraryModel
+    let playlist: Playlist
+    @State private var song: Song?
+    var body: some View {
+        HStack(spacing: 16) {
+            CollectionCover(song: song, size: 70, seed: playlist.name)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(playlist.name).font(.headline).lineLimit(2)
+                Text("Playlist • \(playlist.songIDs.count) songs").font(.caption).foregroundStyle(Palette.muted)
+            }
+        }.padding(.vertical, 6).task(id: playlist.songIDs.first) {
+            if let id = playlist.songIDs.first { do { song = try await library.db.song(id) } catch { library.errorMessage = error.localizedDescription } }
+            else { song = nil }
+        }
     }
 }
 
