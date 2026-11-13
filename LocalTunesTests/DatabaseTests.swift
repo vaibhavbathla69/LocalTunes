@@ -46,4 +46,67 @@ final class DatabaseTests: XCTestCase {
         XCTAssertEqual(Song.fallbackTitle(filename: "A song.mp3"), "A song")
         XCTAssertEqual(LibraryPaths.sidecarKey("CAFÉ.MP3"), LibraryPaths.sidecarKey("cafe.lrc"))
     }
+
+    func testSearchMatchesAllWordsWithGapsAndInAnyOrder() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = try LibraryDatabase(url: root.appendingPathComponent("db"))
+        try await db.save(song("match", title: "Drugs You Should Try It"))
+        try await db.save(song("only-first", title: "Drugs"))
+        try await db.save(song("only-rest", title: "Should It"))
+        for query in ["drugs should it", "it drugs should", "DRUGS SHO IT", "  drugs\tshould\n it  "] {
+            let results = try await db.songs(search: query)
+            XCTAssertEqual(results.map(\.id), ["match"], query)
+            let queue = try await db.allIDs(search: query)
+            XCTAssertEqual(queue, ["match"], query)
+        }
+        let missing = try await db.songs(search: "drugs missingword")
+        XCTAssertTrue(missing.isEmpty)
+        let whitespace = try await db.allIDs(search: " \t\n ")
+        XCTAssertEqual(whitespace.count, 3)
+    }
+
+    func testWordSearchCombinesMetadataFiltersPaginationAndLiteralCharacters() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = try LibraryDatabase(url: root.appendingPathComponent("db"))
+        for (id, title, year) in [("a", "Drugs You Should Try It", 2014), ("b", "Drugs Again", 2014), ("c", "Drugs Later", 2020)] {
+            var value = song(id, title: title)
+            value.artist = "Travis Scott"; value.album = "Days Before Rodeo"
+            value.genre = "Hip Hop"; value.year = year
+            try await db.save(value)
+        }
+        let query = "scott drugs before hip 2014"
+        let filters = SearchFilters(artist: "Travis Scott", album: "Days Before Rodeo", year: 2014)
+        let ids = try await db.allIDs(search: query, searchFilters: filters)
+        XCTAssertEqual(ids, ["b", "a"])
+        let page = try await db.songs(search: query, limit: 1, offset: 1, searchFilters: filters)
+        XCTAssertEqual(page.map(\.id), ["a"])
+        let wrongFilter = try await db.songs(search: query, searchFilters: SearchFilters(year: 2020))
+        XCTAssertTrue(wrongFilter.isEmpty)
+        let notFavourite = try await db.songs(search: query, favourite: true)
+        XCTAssertTrue(notFavourite.isEmpty)
+        try await db.save(song("literal", title: "100% under_score back\\slash"))
+        try await db.save(song("decoy", title: "100 other underscore backslash"))
+        let literal = try await db.allIDs(search: "100% under_score back\\slash")
+        XCTAssertEqual(literal, ["literal"])
+    }
+
+    func testCollectionSearchMatchesWordsInAnyOrder() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = try LibraryDatabase(url: root.appendingPathComponent("db"))
+        var value = song("a", title: "Song")
+        value.artist = "Travis Scott"; value.album = "Days Before Rodeo"; value.genre = "Hip Hop"
+        try await db.save(value)
+        for (kind, query, expected) in [(LibraryGroup.album, "rodeo days", "Days Before Rodeo"), (.artist, "SCOTT TRAV", "Travis Scott"), (.genre, "hop hip", "Hip Hop")] {
+            let groups = try await db.groups(kind, search: query)
+            XCTAssertEqual(groups.map(\.name), [expected])
+        }
+        let missing = try await db.groups(.album, search: "rodeo unknown")
+        XCTAssertTrue(missing.isEmpty)
+    }
 }

@@ -2,7 +2,11 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
-### Version 1.4.1 ? pixel branding
+### Version 1.4.2: word search
+
+Search requires every word you type, in any order and with gaps between them: `drugs should it` finds `Drugs You Should Try It`. Partial words and case-insensitive matching are retained. Song words can match title, artist, album, genre or year; album/artist/genre browsing matches words within the collection name. Extra whitespace is ignored, and `%`, `_` and backslash remain literal characters. Filters, pagination and Play/Shuffle use the same matching rules. Existing libraries need no reimport.
+
+### Version 1.4.1: pixel branding
 
 A lime pixel vinyl/play mark replaces the waveform app icon and appears in Settings. The opaque square source, generation prompt and export instructions are in `branding/`. Re-export assets with `python scripts/make_icon.py` (Pillow is development-only).
 

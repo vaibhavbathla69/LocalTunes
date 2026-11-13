@@ -49,7 +49,7 @@ final class NavigationTests: XCTestCase {
         let search = app.textFields["localSearchField"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         capture(app, name: "14-SearchBrowse")
-        search.tap(); search.typeText("CI reference")
+        search.tap(); search.typeText("reference CI")
         XCTAssertTrue(app.buttons["song.CI reference tone"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["song.CI second tone"].exists)
         capture(app, name: "10-SearchResults")

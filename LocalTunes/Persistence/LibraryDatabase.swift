@@ -253,9 +253,11 @@ actor LibraryDatabase {
     private func filters(search: String, favourite: Bool, group: LibraryGroup?, value: String?, extra: SearchFilters = SearchFilters(), smart: SmartCollection? = nil) throws -> (String, [String]) {
         var clauses = ["1=1"]
         var args: [String] = []
-        if !search.isEmpty {
+        // Each word is required, but words may appear in any order or metadata
+        // field. Keep this shared with allIDs so playback matches the results.
+        for term in search.split(whereSeparator: { $0.isWhitespace }) {
             clauses.append("(title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\' OR album LIKE ? ESCAPE '\\' OR genre LIKE ? ESCAPE '\\' OR CAST(json_extract(CAST(payload AS TEXT),'$.year') AS TEXT) LIKE ? ESCAPE '\\')")
-            let escaped = search.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
+            let escaped = String(term).replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
             args += Array(repeating: "%\(escaped)%", count: 5)
         }
         if favourite { clauses.append("favourite=1") }
@@ -303,6 +305,7 @@ actor LibraryDatabase {
 
     func groups(_ kind: LibraryGroup, search: String = "", searchFilters: SearchFilters = SearchFilters()) throws -> [GroupSummary] {
         let filter = try filters(search: "", favourite: false, group: nil, value: nil, extra: searchFilters)
+        let terms = search.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         let sql = kind == .artist
             ? "SELECT artists.name,COUNT(DISTINCT songs.id) FROM songs JOIN song_artists ON songs.id=song_artists.song_id JOIN artists ON artists.key=song_artists.artist_key WHERE \(filter.0) GROUP BY artists.key ORDER BY artists.name COLLATE NOCASE"
             : "SELECT \(kind.rawValue),COUNT(*) FROM songs WHERE \(filter.0) GROUP BY \(kind.rawValue) ORDER BY \(kind.rawValue) COLLATE NOCASE"
@@ -314,7 +317,7 @@ actor LibraryDatabase {
             if code == SQLITE_DONE { break }
             guard code == SQLITE_ROW else { throw error() }
             let name = String(cString: sqlite3_column_text(statement, 0))
-            if search.isEmpty || name.localizedStandardContains(search) {
+            if terms.allSatisfy({ name.localizedStandardContains($0) }) {
                 result.append(GroupSummary(name: name, count: Int(sqlite3_column_int(statement, 1))))
             }
         }
