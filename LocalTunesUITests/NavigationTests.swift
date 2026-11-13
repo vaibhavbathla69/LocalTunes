@@ -247,8 +247,9 @@ final class NavigationTests: XCTestCase {
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Pause'"), object: app.buttons["nowPlaying.playPause"])
         XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 5), .completed)
         app.buttons["nowPlaying.queue"].tap()
-        XCTAssertTrue(app.staticTexts["queue.count"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["queue.count"].label.lowercased(), "3 tracks")
+        let count = app.descendants(matching: .any).matching(identifier: "queue.count").firstMatch
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        XCTAssertEqual(count.label.lowercased(), "3 tracks")
         capture(app, name: "30-QueueAfterRightSwipe")
     }
 

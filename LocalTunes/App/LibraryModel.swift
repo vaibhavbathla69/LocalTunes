@@ -247,7 +247,10 @@ final class LibraryModel: ObservableObject {
                     guard let song = try await db.song(id), song.artistTagsVersion == nil else { continue }
                     artistScanProgress = "\(index + 1) / \(ids.count)"
                     do {
-                        let tags = song.originalFilename.lowercased().hasSuffix(".flac") ? try await MetadataExtractor.readFLACArtistTags(paths.audioURL(for: song)) : nil
+                        let tags: FLACMetadata.Tags?
+                        if song.originalFilename.lowercased().hasSuffix(".flac") {
+                            tags = try await MetadataExtractor.readFLACArtistTags(paths.audioURL(for: song))
+                        } else { tags = nil }
                         if let updated = try await db.fillMissingArtistTags(song, tags: tags) { player.refreshSong(updated) }
                         if index % 50 == 0 { revision += 1 }
                     } catch is CancellationError { throw CancellationError() }
