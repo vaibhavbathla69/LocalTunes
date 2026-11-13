@@ -46,7 +46,7 @@ struct SystemVolumeControl: UIViewRepresentable {
 
 struct AudioFormatBadge: View {
     let song: Song
-    private var lossless: Bool { ["flac", "alac", "wav", "wave", "aiff", "aif"].contains((song.relativePath as NSString).pathExtension.lowercased()) }
+    private var lossless: Bool { ["flac", "alac"].contains((song.relativePath as NSString).pathExtension.lowercased()) }
     var body: some View {
         if lossless {
             Label("Lossless file", systemImage: "waveform")

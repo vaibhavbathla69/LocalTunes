@@ -224,7 +224,7 @@ final class NavigationTests: XCTestCase {
         capture(app, name: "28-HomeSongsAndStats")
         app.buttons["home.stats"].tap()
         XCTAssertTrue(app.staticTexts["Listening time"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Home"].tap()
+        app.navigationBars.buttons["Listen Now"].tap()
         scrollTo(app.staticTexts["Recently added"], app: app)
         XCTAssertTrue(app.tabBars.buttons["Playlists"].exists)
     }

@@ -22,21 +22,21 @@ struct NowPlayingView: View {
             GeometryReader { proxy in
                 ScrollView {
                     if let song = player.currentSong {
-                        VStack(spacing: 22) {
+                        VStack(spacing: 16) {
                             Button { album = AlbumDestination(name: song.album) } label: {
                                 HStack(spacing: 7) { Text(song.album).lineLimit(1); Image(systemName: "chevron.right").font(.caption2.bold()) }.font(.subheadline.weight(.semibold))
                                     .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                             }.buttonStyle(.plain).accessibilityLabel("Open album \(song.album)").accessibilityIdentifier("nowPlaying.album")
-                            ArtworkView(song: song, size: max(130, min(350, min(proxy.size.width - 52, proxy.size.height * 0.39))), fullSize: true, cornerRadius: 12)
+                            ArtworkView(song: song, size: max(130, min(350, min(proxy.size.width - 52, proxy.size.height * 0.43))), fullSize: true, cornerRadius: 12)
                                 .shadow(color: .black.opacity(0.35), radius: 28, y: 16)
                                 .scaleEffect(player.isPlaying ? 1 : 0.88)
                                 .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8), value: player.isPlaying)
                                 .padding(.vertical, 10)
                             trackDetails(song)
+                            AudioFormatBadge(song: song)
                             PlaybackTimeline()
                             transport
                             SystemVolumeControl().frame(height: 34).accessibilityLabel("Volume")
-                            if let song = player.currentSong { AudioFormatBadge(song: song) }
                             HStack {
                                 Button { lyrics = true } label: { Label("Lyrics", systemImage: "quote.bubble.fill").font(.subheadline.bold()).padding(.horizontal, 17).frame(height: 44).background(.white.opacity(0.13), in: Capsule()) }
                                     .accessibilityLabel("Open lyrics").accessibilityIdentifier("nowPlaying.lyrics")

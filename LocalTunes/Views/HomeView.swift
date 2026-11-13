@@ -94,7 +94,7 @@ struct HomeView: View {
         }
     }
     private func heading(_ title: String) -> some View {
-        Text(title).font(.title2.bold()).foregroundStyle(.primary).textCase(nil).padding(.top, 16).padding(.bottom, 6)
+        Text(title).font(.title2.bold()).foregroundStyle(Color(uiColor: .label)).textCase(nil).padding(.top, 16).padding(.bottom, 6)
     }
     private func metric(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
