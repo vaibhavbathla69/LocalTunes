@@ -25,10 +25,11 @@ struct HomeView: View {
                     Button("Choose a folder", systemImage: "folder.badge.plus") { library.importFolder = true }
                 }.listRowBackground(Color.clear)
             }
-        }.listStyle(.plain).scrollContentBackground(.hidden)
+        }.listStyle(.insetGrouped).scrollContentBackground(.hidden)
             .background { ArtworkBackdrop(song: feed.recentAlbums.first?.representative ?? feed.added.first, strength: 0.32).ignoresSafeArea() }
             .navigationTitle("Home").navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(Palette.background.opacity(0.96), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { customizing = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 36, height: 36) }.accessibilityLabel("Customize Home").accessibilityIdentifier("home.customize")

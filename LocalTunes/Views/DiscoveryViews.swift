@@ -11,7 +11,7 @@ struct ArtistDetailView: View {
     @State private var merging = false
     var body: some View {
         List {
-            CollectionHeader(title: displayName.isEmpty ? name : displayName, subtitle: "\(albums.count) albums", song: representative, symbol: "person.fill")
+            CollectionHeader(title: displayName.isEmpty ? name : displayName, subtitle: "\(albums.count) \(albums.count == 1 ? "album" : "albums")", song: representative, symbol: "person.fill")
                 .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
             Section("Albums") {
                 ScrollView(.horizontal, showsIndicators: false) {
