@@ -58,6 +58,9 @@ final class PlaybackService: ObservableObject {
     var activePlayerCount: Int {
         [player, fadingPlayer].compactMap { $0 }.filter { $0.timeControlStatus == .playing }.count
     }
+    var crossfadeDiagnostics: String {
+        "position=\(position)/\(duration), playing=\(isPlaying), overlap=\(isCrossfading), active=\(activePlayerCount), prepared=\(preparedFade != nil), prerolled=\(preparedFade?.ready ?? false), incomingStatus=\(preparedFade?.player.status.rawValue ?? -1)"
+    }
     #endif
 
     init(db: LibraryDatabase, paths: LibraryPaths) {
@@ -261,6 +264,9 @@ final class PlaybackService: ObservableObject {
             guard FileManager.default.fileExists(atPath: paths.audioURL(for: song).path) else {
                 throw LibraryError.message("The audio file is missing. Reimport the original file to repair this song.")
             }
+            // Configure the audio pipeline before either player starts preparing.
+            // Reconfiguring it after incoming preroll can interrupt that preroll.
+            if wantsPlayback { try activateSession() }
             let item = makeItem(song, entry: entry)
             handledItem = ObjectIdentifier(item)
             player.insert(item, after: nil)
@@ -274,7 +280,7 @@ final class PlaybackService: ObservableObject {
             await fillUpcoming()
             guard token == generation else { return }
             if wantsPlayback {
-                try activateSession(); player.play()
+                player.play()
                 try await db.recordPlay(song.id)
             }
             updateNowPlaying(loadArtwork: true)

@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import AVFoundation
 @testable import LocalTunes
 
 final class FLACPlaybackTests: XCTestCase {
@@ -46,11 +47,15 @@ final class FLACPlaybackTests: XCTestCase {
     @MainActor
     func testCrossfadeOverlapsNextFLACAndPauseCancelsBothPlayers() async throws {
         let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        // Exercise a real category change on cold playback, rather than inheriting
+        // an already configured playback session from a previous test.
+        try AVAudioSession.sharedInstance().setActive(false)
+        try AVAudioSession.sharedInstance().setCategory(.ambient)
         let player = PlaybackService(db: db, paths: paths)
         await player.setCrossfade(1)
         await player.play(ids: songs.map(\.id))
         let faded = await waitUntil { player.isCrossfading && player.activePlayerCount == 2 }
-        XCTAssertTrue(faded, player.errorMessage ?? "Prepared FLAC crossfade did not begin")
+        XCTAssertTrue(faded, "\(player.errorMessage ?? "Prepared FLAC crossfade did not begin"); \(player.crossfadeDiagnostics)")
         XCTAssertEqual(player.currentSong?.id, songs[1].id)
         player.pause()
         XCTAssertFalse(player.isCrossfading); XCTAssertFalse(player.isPlaying)
