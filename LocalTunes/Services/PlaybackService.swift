@@ -37,7 +37,8 @@ final class PlaybackService: ObservableObject {
     private var lastSavedPosition: Double = -100
     private var resumeAfterInterruption = false
     private var wantsPlayback = false
-    private var preparedFade: (player: AVQueuePlayer, entry: QueueEntry, song: Song)?
+    private var preparedFade: (player: AVQueuePlayer, entry: QueueEntry, song: Song, ready: Bool)?
+    private var fadePreparation: NSKeyValueObservation?
     private var fadingPlayer: AVQueuePlayer?
     private var fadeTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
@@ -313,8 +314,21 @@ final class PlaybackService: ObservableObject {
             if crossfadeSeconds > 0, entry.id != queue.currentID, queue.repeatMode != .one {
                 let incoming = AVQueuePlayer(items: [audioItem(song)])
                 incoming.automaticallyWaitsToMinimizeStalling = false; incoming.volume = 0
-                preparedFade = (incoming, entry, song)
-                incoming.preroll(atRate: 1) { _ in }
+                preparedFade = (incoming, entry, song, false)
+                // AVPlayer throws an Objective-C exception if preroll is called before readiness.
+                fadePreparation = incoming.observe(\.status, options: [.initial, .new]) { [weak self, weak incoming] _, _ in
+                    Task { @MainActor in
+                        guard let self, let incoming, self.preparedFade?.player === incoming,
+                              incoming.status == .readyToPlay else { return }
+                        self.fadePreparation?.invalidate(); self.fadePreparation = nil
+                        incoming.preroll(atRate: 1) { [weak self, weak incoming] finished in
+                            Task { @MainActor in
+                                guard let self, let incoming, self.preparedFade?.player === incoming else { return }
+                                self.preparedFade?.ready = finished
+                            }
+                        }
+                    }
+                }
             }
         } catch { report(error) }
     }
@@ -359,7 +373,8 @@ final class PlaybackService: ObservableObject {
         currentSong = song; duration = song.duration; position = 0
         beginListening(song: song, entry: entry, forceNew: true)
         if !isCrossfading { player.volume = gain(song) }
-        preparedFade?.player.pause(); preparedFade = nil
+        fadePreparation?.invalidate(); fadePreparation = nil
+        preparedFade?.player.cancelPendingPrerolls(); preparedFade?.player.pause(); preparedFade = nil
         let valid = Set(player.items().map(ObjectIdentifier.init))
         itemEntries = itemEntries.filter { valid.contains($0.key) }
         itemSongs = itemSongs.filter { valid.contains($0.key) }
@@ -570,15 +585,17 @@ final class PlaybackService: ObservableObject {
     func cancelAnalysis() { analysisTask?.cancel() }
 
     private func cancelFade() {
+        fadePreparation?.invalidate(); fadePreparation = nil
         fadeTask?.cancel(); fadeTask = nil
         fadingPlayer?.pause(); fadingPlayer?.removeAllItems(); fadingPlayer = nil
-        preparedFade?.player.pause(); preparedFade?.player.removeAllItems(); preparedFade = nil
+        preparedFade?.player.cancelPendingPrerolls(); preparedFade?.player.pause(); preparedFade?.player.removeAllItems(); preparedFade = nil
         isCrossfading = false; player.volume = gain(currentSong)
     }
 
     private func startCrossfadeIfReady() {
         guard !isCrossfading, sleepTimer.entryID == nil, crossfadeSeconds > 0,
-              let prepared = preparedFade, prepared.entry.id == queue.following(automatic: true)?.id,
+              let prepared = preparedFade, prepared.ready, prepared.player.status == .readyToPlay,
+              prepared.entry.id == queue.following(automatic: true)?.id,
               let item = prepared.player.currentItem, item.status == .readyToPlay, queue.repeatMode != .one else { return }
         let length = min(crossfadeSeconds, min(duration / 2, prepared.song.duration / 2))
         let remaining = duration - position

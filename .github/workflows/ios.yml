@@ -33,6 +33,12 @@ jobs:
           DEVICE_ID=$(python3 scripts/simulator.py)
           xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:LocalTunesTests/FLACPlaybackTests \
+            -derivedDataPath build/TestData -resultBundlePath build/FLACTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee flac-test.log
+          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -skip-testing:LocalTunesTests/FLACPlaybackTests \
             -derivedDataPath build/TestData -resultBundlePath build/Tests.xcresult \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
       - name: Compile for physical iPhone without signing
@@ -72,6 +78,8 @@ jobs:
           path: |
             build.log
             test.log
+            flac-test.log
+            build/FLACTests.xcresult
             build/Tests.xcresult
             build/Screenshots
           if-no-files-found: ignore
