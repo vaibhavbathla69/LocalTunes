@@ -214,10 +214,25 @@ actor LibraryDatabase {
         let statement = try prepare("SELECT COUNT(*),COALESCE(SUM(duration_seconds),0),COUNT(DISTINCT artist),MIN(artist),COALESCE(MAX(album_order IS NOT NULL),0),COALESCE(MAX(disc_number),1) FROM songs WHERE album=?", [name])
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_ROW else { throw error() }
-        let artist = sqlite3_column_text(statement, 3).map { String(cString: $0) } ?? "Unknown artist"
+        let artist = try albumArtist(name)
         return AlbumSummary(count: Int(sqlite3_column_int(statement, 0)), duration: sqlite3_column_double(statement, 1),
-                            artist: sqlite3_column_int(statement, 2) > 1 ? "Various artists" : artist,
+                            artist: artist,
                             hasCustomOrder: sqlite3_column_int(statement, 4) != 0, maxDisc: Int(sqlite3_column_int(statement, 5)))
+    }
+
+    private func albumArtist(_ album: String) throws -> String {
+        let s = try prepare("SELECT DISTINCT artist FROM songs WHERE album=?", [album]); defer { sqlite3_finalize(s) }
+        var keys: Set<String> = [], display = "Unknown artist"
+        while true {
+            let code = sqlite3_step(s)
+            if code == SQLITE_DONE { return display }
+            guard code == SQLITE_ROW else { throw error() }
+            let raw = String(cString: sqlite3_column_text(s, 0))
+            guard let primary = ArtistCredits.names(artist: raw, title: "").first else { continue }
+            keys.insert(try ArtistIndex.resolve(connection, primary))
+            if keys.count > 1 { return "Various artists" }
+            display = try artistDisplayName(primary)
+        }
     }
 
     func setAlbumOrder(_ name: String, songIDs: [String]) throws {
@@ -337,6 +352,7 @@ actor LibraryDatabase {
         current.genre = Song.text(edits.genre, fallback: "Unknown genre")
         current.trackNumber = edits.track; current.discNumber = edits.disc; current.year = edits.year
         current.artworkPath = edits.artworkPath
+        current.artistTagsVersion = 1
         try execute("BEGIN IMMEDIATE")
         do {
             try save(current)
@@ -354,6 +370,22 @@ actor LibraryDatabase {
     func fillMissingYear(_ id: String, year: Int) throws -> Song? {
         guard var current = try song(id), current.year == nil, (1...9999).contains(year) else { return nil }
         current.year = year; try save(current); return current
+    }
+
+    func fillMissingArtistTags(_ snapshot: Song, tags: FLACMetadata.Tags?) throws -> Song? {
+        guard var current = try song(snapshot.id), current.artistTagsVersion == nil,
+              current.artist == snapshot.artist, current.title == snapshot.title else { return nil }
+        if let tags, tags.artists.count > 1,
+           current.artist == tags.artists.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+           current.title == Song.text(tags["TITLE"], fallback: Song.fallbackTitle(filename: current.originalFilename)) {
+            let combined = tags.artists.joined(separator: "; ")
+            let existing = Set(ArtistCredits.names(artist: current.artist, title: current.title).map(ArtistCredits.key))
+            let complete = Set(ArtistCredits.names(artist: combined, title: current.title).map(ArtistCredits.key))
+            if existing.isStrictSubset(of: complete) { current.artist = combined }
+        }
+        current.artistTagsVersion = 1
+        try save(current)
+        return current
     }
 
     func listeningReport() throws -> ListeningReport {

@@ -37,6 +37,9 @@ struct SettingsView: View {
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
             Section("Library care") {
+                if let progress = library.artistScanProgress {
+                    HStack { ProgressView(); Text("Artist credits \(progress)"); Spacer(); Button("Cancel") { library.cancelArtistScan() } }
+                }
                 Button("Reset artist merges", systemImage: "arrow.uturn.backward") { resettingArtists = true }
                 if let progress = library.yearScanProgress {
                     HStack { ProgressView(); Text(progress); Spacer(); Button("Cancel") { library.cancelYearScan() } }

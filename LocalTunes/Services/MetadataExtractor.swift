@@ -17,6 +17,9 @@ struct ExtractedMetadata: Sendable {
 }
 
 enum MetadataExtractor {
+    static func readFLACArtistTags(_ url: URL) async throws -> FLACMetadata.Tags? {
+        try FLACMetadata.read(url, includeArtwork: false)
+    }
     static func extract(_ url: URL, originalName: String) async throws -> ExtractedMetadata {
         let asset = AVURLAsset(url: url)
         guard try await asset.load(.isPlayable), !(try await asset.loadTracks(withMediaType: .audio)).isEmpty else {

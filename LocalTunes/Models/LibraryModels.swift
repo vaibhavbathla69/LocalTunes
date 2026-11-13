@@ -18,6 +18,7 @@ struct Song: Identifiable, Codable, Hashable, Sendable {
     var isFavourite: Bool = false
     var discNumber: Int? = nil
     var year: Int? = nil
+    var artistTagsVersion: Int? = nil
 
     var effectiveTrackNumber: Int { trackNumber > 0 ? min(65535, trackNumber) : (AlbumPosition.filename(originalFilename).track ?? 0) }
     var effectiveDiscNumber: Int { min(65535, max(1, discNumber ?? AlbumPosition.filename(originalFilename).disc ?? 1)) }

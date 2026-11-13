@@ -25,7 +25,7 @@ enum FLACMetadata {
         let rate = packed >> 44, samples = packed & 0xFFFFFFFFF
         return rate > 0 && samples > 0 ? Double(samples) / Double(rate) : nil
     }
-    static func read(_ url: URL) throws -> Tags? {
+    static func read(_ url: URL, includeArtwork: Bool = true) throws -> Tags? {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         guard try handle.read(upToCount: 4) == Data("fLaC".utf8) else { return nil }
@@ -37,7 +37,7 @@ enum FLACMetadata {
             let length = Int(header[1]) << 16 | Int(header[2]) << 8 | Int(header[3])
             total += length
             guard total <= 64 * 1024 * 1024 else { break }
-            if type == 0 || type == 4 || type == 6 {
+            if type == 0 || type == 4 || (type == 6 && includeArtwork) {
                 guard let block = try handle.read(upToCount: length), block.count == length else { break }
                 if type == 0 { tags.duration = streamDuration(block) }
                 else if type == 4 {

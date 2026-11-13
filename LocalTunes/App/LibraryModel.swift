@@ -28,6 +28,8 @@ final class LibraryModel: ObservableObject {
     @Published var recentSearches: [String] = []
     @Published var yearScanProgress: String?
     private var yearScanTask: Task<Void, Never>?
+    @Published var artistScanProgress: String?
+    private var artistScanTask: Task<Void, Never>?
 
     init(paths: LibraryPaths, db: LibraryDatabase) {
         self.paths = paths; self.db = db
@@ -42,6 +44,7 @@ final class LibraryModel: ObservableObject {
             recentSearches = try await db.state("search.history", as: [String].self) ?? []
             await refresh()
             await player.restore()
+            scanMissingArtistTags()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -231,4 +234,28 @@ final class LibraryModel: ObservableObject {
         }
     }
     func cancelYearScan() { yearScanTask?.cancel() }
+
+    func scanMissingArtistTags() {
+        guard artistScanTask == nil else { return }
+        artistScanProgress = "Starting"
+        artistScanTask = Task {
+            defer { artistScanProgress = nil; artistScanTask = nil; revision += 1 }
+            do {
+                let ids = try await db.allIDs()
+                for (index, id) in ids.enumerated() {
+                    try Task.checkCancellation()
+                    guard let song = try await db.song(id), song.artistTagsVersion == nil else { continue }
+                    artistScanProgress = "\(index + 1) / \(ids.count)"
+                    do {
+                        let tags = song.originalFilename.lowercased().hasSuffix(".flac") ? try await MetadataExtractor.readFLACArtistTags(paths.audioURL(for: song)) : nil
+                        if let updated = try await db.fillMissingArtistTags(song, tags: tags) { player.refreshSong(updated) }
+                        if index % 50 == 0 { revision += 1 }
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { continue } // Keep existing credits if a managed file is unavailable.
+                }
+            } catch is CancellationError { }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+    func cancelArtistScan() { artistScanTask?.cancel() }
 }

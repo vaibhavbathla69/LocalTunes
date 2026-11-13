@@ -149,13 +149,15 @@ struct QueueView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("\(player.queue.entries.count) tracks") {
+                Section {
                     ForEach(player.queue.entries) { entry in QueueSongRow(entry: entry).listRowBackground(Color.white.opacity(0.05)).listRowSeparator(.hidden) }
                         .onDelete { offsets in
                             let ids = Set(offsets.compactMap { player.queue.entries.indices.contains($0) ? player.queue.entries[$0].id : nil })
                             Task { await player.remove(entryIDs: ids) }
                         }
                         .onMove { from, to in Task { await player.move(from: from, to: to) } }
+                } header: {
+                    Text("\(player.queue.entries.count) tracks").accessibilityIdentifier("queue.count")
                 }
             }.scrollContentBackground(.hidden).background { ArtworkBackdrop(song: player.currentSong, strength: 0.45).ignoresSafeArea() }
                 .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }

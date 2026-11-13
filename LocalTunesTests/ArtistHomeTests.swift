@@ -70,6 +70,8 @@ final class ArtistHomeTests: XCTestCase {
         try await db.mergeArtist("FrankOcean", into: "Frank Ocean")
         artists = try await db.groups(.artist)
         XCTAssertEqual(artists.map(\.name), ["Frank Ocean"]); XCTAssertEqual(artists.first?.count, 4)
+        let album = try await db.albumSummary("Album")
+        XCTAssertEqual(album.artist, "Frank Ocean")
         let report = try await db.listeningReport()
         XCTAssertEqual(report.artists.first?.plays, 1, "Merging two credits on one song must not double-count it.")
         let reopened = try LibraryDatabase(url: root.appendingPathComponent("library.sqlite"))
@@ -108,6 +110,30 @@ final class ArtistHomeTests: XCTestCase {
         _ = try await db.editSong("a", edits: edit)
         let artists = try await db.groups(.artist)
         XCTAssertEqual(artists.map(\.name), ["Frank Ocean"])
+    }
+    func testOldFLACEntriesRecoverMissingCreditsWithoutOverwritingEditsOrHistory() async throws {
+        let (root, db) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let old = song("old", artist: "Travis Scott")
+        try await db.save(old)
+        _ = try await db.toggleFavourite(old.id); try await db.recordPlay(old.id)
+        var tags = FLACMetadata.Tags()
+        tags.values = ["TITLE": "old"]; tags.artists = ["Travis Scott", "The Weeknd"]
+        let repaired = try await db.fillMissingArtistTags(old, tags: tags)
+        XCTAssertEqual(repaired?.artist, "Travis Scott; The Weeknd")
+        XCTAssertTrue(repaired?.isFavourite == true); XCTAssertNotNil(repaired?.lastPlayedAt)
+        let guest = try await db.allIDs(group: .artist, value: "The Weeknd")
+        XCTAssertEqual(guest, [old.id])
+        let again = try await db.fillMissingArtistTags(old, tags: tags)
+        XCTAssertNil(again)
+        let manual = song("manual", artist: "Frank Ocean")
+        try await db.save(manual)
+        tags.values["TITLE"] = "manual"
+        let retained = try await db.fillMissingArtistTags(manual, tags: tags)
+        XCTAssertEqual(retained?.artist, "Frank Ocean")
+        let edited = SongEdits(title: "old", artist: "Other artist", album: "Album", genre: "Test", track: 1, disc: nil, year: nil, artworkPath: nil)
+        _ = try await db.editSong(old.id, edits: edited)
+        let stale = try await db.fillMissingArtistTags(old, tags: tags)
+        XCTAssertNil(stale)
     }
     func testHomeAlbumRanksAndLegacyLayoutMigration() async throws {
         let (root, db) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
