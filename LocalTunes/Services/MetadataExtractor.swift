@@ -13,6 +13,7 @@ struct ExtractedMetadata: Sendable {
     var duration: Double
     var artwork: Data?
     var lyrics: String?
+    var year: Int? = nil
 }
 
 enum MetadataExtractor {
@@ -41,18 +42,35 @@ enum MetadataExtractor {
             if artwork == nil && (common == "artwork" || key.contains("apic") || key.contains("covr")) { artwork = try? await item.load(.dataValue) }
             if (lyrics ?? "").isEmpty && (key.contains("lyrics") || key.contains("uslt") || identifier.hasSuffix("/©lyr")) { lyrics = try? await item.load(.stringValue) }
         }
+        let flac = try? FLACMetadata.read(url)
+        if let flac {
+            title = flac["TITLE"] ?? title; artist = flac["ARTIST"] ?? artist
+            album = flac["ALBUM"] ?? album; genre = flac["GENRE"] ?? genre
+            artwork = flac.picture ?? artwork; lyrics = flac["LYRICS"] ?? flac["UNSYNCEDLYRICS"] ?? lyrics
+        }
+        var year = flac?.year
+        if year == nil {
+            for item in items {
+                let key = "\(item.commonKey?.rawValue ?? "") \(item.identifier?.rawValue ?? "")".lowercased()
+                if key.contains("creationdate") || key.contains("tdrc") || key.contains("tyer") || key.contains("day") {
+                    if let date = try? await item.load(.stringValue), let parsed = Int(date.prefix(4)) { year = parsed; break }
+                }
+            }
+        }
         let position = await position(in: items, filename: originalName)
         return ExtractedMetadata(title: Song.text(title, fallback: Song.fallbackTitle(filename: originalName)),
                                  artist: Song.text(artist, fallback: "Unknown artist"), album: Song.text(album, fallback: "Unknown album"),
-                                 genre: Song.text(genre, fallback: "Unknown genre"), track: position.track ?? 0, disc: position.disc, duration: duration,
-                                 artwork: artwork, lyrics: lyrics)
+                                 genre: Song.text(genre, fallback: "Unknown genre"), track: AlbumPosition.number(flac?["TRACKNUMBER"]) ?? position.track ?? 0, disc: AlbumPosition.number(flac?["DISCNUMBER"]) ?? position.disc, duration: duration,
+                                 artwork: artwork, lyrics: lyrics, year: year)
     }
 
     static func readPosition(_ url: URL, filename: String) async throws -> (track: Int?, disc: Int?) {
         let asset = AVURLAsset(url: url)
         var items = try await asset.load(.commonMetadata)
         for format in try await asset.load(.availableMetadataFormats) { items += try await asset.loadMetadata(for: format) }
-        return await position(in: items, filename: filename)
+        let native = await position(in: items, filename: filename)
+        let flac = try? FLACMetadata.read(url)
+        return (AlbumPosition.number(flac?["TRACKNUMBER"]) ?? native.track, AlbumPosition.number(flac?["DISCNUMBER"]) ?? native.disc)
     }
 
     static func position(in items: [AVMetadataItem], filename: String) async -> (track: Int?, disc: Int?) {

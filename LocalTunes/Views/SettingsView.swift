@@ -31,6 +31,10 @@ struct SettingsView: View {
                 Toggle("Follow synchronized lyrics", isOn: $lyricsAutoFollow)
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
+            Section {
+                NavigationLink("Playback", systemImage: "slider.horizontal.3") { PlaybackOptionsView() }
+                NavigationLink("Listening stats", systemImage: "chart.bar") { ListeningStatsView() }
+            }
             Section("Library care") {
                 Button(auditing ? "Checking files…" : "Check for missing audio files", systemImage: "checkmark.shield") {
                     auditing = true

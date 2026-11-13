@@ -34,6 +34,7 @@ enum UITestSupport {
             song.genre = "Electronic"
             song.trackNumber = song.originalFilename.contains("Zulu") ? 1 : (warm ? 2 : 1)
             song.discNumber = 1
+            song.year = 2024
             song.artworkPath = try MetadataExtractor.writeArtwork(cover(warm: warm), id: song.id, paths: paths)
             try await db.save(song)
         }

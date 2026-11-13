@@ -2,6 +2,23 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.3 — library and playback tools
+
+- Artist pages: album shelves, top tracks from local play counts, and the complete artist song list. Open an artist in Library/Search or from Now Playing options.
+- Song swipes in lists: right to like, left for Play Next, Queue and Playlist. Long-press retains all actions and adds **Edit details**.
+- Smart playlists: Recently added (30 days), Most played (counted plays), Forgotten favourites (liked and not played for 30 days, including never played). These update from the library rather than storing duplicate songs.
+- Search filters: combine artist, album, genre and release year. Search text also matches genre/year. Recent queries are stored locally and can be cleared. Filtered Play/Shuffle uses all matching IDs, including later result pages.
+- Edit title, artist, album, genre, track, disc, year and artwork in the local index. **Read details from file** refills the editor from tags. New imports read release years; for existing imports use this editor to read or set a missing year. Audio bytes and external source files are unchanged. Changing album clears that song's old custom album rank.
+- Now Playing options include **Sleep timer** (5–60 minutes, custom 1–240 minutes, or end of current queue entry), **View artist**, editing and playback settings. Timers are session-only and can be cancelled.
+- Settings → Playback: crossfade from 1–8 seconds or Off. Off retains the preloaded native queue for intact album transitions. Crossfade uses an independently prepared player, linear gain ramps, and skips repeat-one/end-of-song timers; if preparation is unavailable, playback follows the normal queue. Pause, seek, queue changes, interruptions and route loss cancel overlaps. Sample-accurate gapless output remains format/device dependent and is not guaranteed.
+- Optional volume balancing decodes audio in bounded PCM buffers on this phone, caches RMS/peak measurements, and attenuates louder tracks toward −20 dBFS RMS with peak headroom. It never boosts quiet tracks or changes files; this is not a broadcast LUFS loudness meter. Unmeasurable files retain their original playback level. Analyze the whole library in Settings, or measure tracks on demand when balancing is enabled.
+- Customize Home with its sliders button: hide/reorder sections. Pin albums and playlists from their options; reorder/remove pins in the Home editor.
+- Settings → Listening stats: local listening time, counted plays, top songs and artists, with a clear control. A play counts after 30 seconds or half the song (minimum 0.5 seconds). Pauses, buffering and seek jumps do not accrue time. Counters start with this update; previous last-played dates remain available. Time checkpoints occur every five seconds and on pause/backgrounding. Deleting a song removes its stats.
+
+FLAC imports now explicitly read Vorbis comments (including track/disc/year/lyrics) and picture blocks in addition to AVFoundation metadata. Two generated FLAC tones exercise native import, decoding, measurement, queue transitions, overlap and timers. They contain no personal music and are test-target resources only; `scripts/make_test_flac.py` regenerates them with optional developer tools soundfile/mutagen. Neither tool is an app or CI dependency.
+
+The database keeps compatible schema 2 and adds a separate listening table with cascading song deletion; new song fields are optional. Existing album ordering, audio, playlists, favourites and queue state are preserved. Install over the existing app with the same signing identity.
+
 ### Version 1.2.1 — simpler labels
 
 Removed decorative slogans, repeated subtitles and album help paragraphs from the main screens. Home, search, playlists and the player keep concise navigation labels, music metadata and controls. Album ordering, library storage and app identity are unchanged.

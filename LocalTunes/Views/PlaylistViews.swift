@@ -6,6 +6,12 @@ struct PlaylistsView: View {
     @State private var name = ""
     var body: some View {
         List {
+            Section("Smart playlists") {
+                ForEach(SmartCollection.allCases) { smart in
+                    NavigationLink { SongListView(title: smart.title, sort: smart.sort, smart: smart) } label: { Label(smart.title, systemImage: smart.symbol).padding(.vertical, 8) }
+                        .accessibilityIdentifier("smart.\(smart.rawValue)")
+                }
+            }.listRowBackground(Color.clear)
             NavigationLink { SongListView(title: "Liked songs", favourite: true) } label: {
                 HStack(spacing: 16) {
                     CollectionCover(symbol: "heart.fill", size: 70, seed: "Liked songs")
@@ -67,6 +73,7 @@ struct PlaylistDetailView: View {
             .toolbar {
                 EditButton()
                 Menu {
+                    Button(library.home.pins.contains(HomePin(kind: .playlist, value: playlistID)) ? "Unpin from Home" : "Pin to Home", systemImage: "pin") { Task { await library.togglePin(HomePin(kind: .playlist, value: playlistID)) } }
                     Button("Rename", systemImage: "pencil") { name = playlist?.name ?? ""; renaming = true }
                     Button("Delete playlist", systemImage: "trash", role: .destructive) { deleting = true }
                 } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Playlist options")

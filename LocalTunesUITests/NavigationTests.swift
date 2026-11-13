@@ -129,6 +129,78 @@ final class NavigationTests: XCTestCase {
     }
 
     @MainActor
+    func testDiscoveryCustomizationFiltersArtistAndStats() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.customize"].waitForExistence(timeout: 20))
+        app.buttons["home.customize"].tap()
+        XCTAssertTrue(app.switches["home.section.featured"].waitForExistence(timeout: 5))
+        app.switches["home.section.featured"].tap()
+        capture(app, name: "18-CustomizeHome")
+        app.buttons["home.customize.save"].tap()
+        app.buttons["Open settings"].tap()
+        app.buttons["Playback"].tap()
+        XCTAssertTrue(app.switches["playback.balancing"].waitForExistence(timeout: 5))
+        capture(app, name: "19-PlaybackSettings")
+        app.navigationBars.buttons["Settings"].tap()
+        app.buttons["Listening stats"].tap()
+        XCTAssertTrue(app.staticTexts["Listening time"].waitForExistence(timeout: 5))
+        capture(app, name: "20-ListeningStats")
+        app.tabBars.buttons["Search"].tap()
+        app.buttons["search.filters"].tap()
+        let year = app.textFields["search.filter.year"]
+        XCTAssertTrue(year.waitForExistence(timeout: 5))
+        year.tap(); year.typeText("2024")
+        capture(app, name: "21-SearchFilters")
+        app.buttons["search.filter.apply"].tap()
+        XCTAssertTrue(app.buttons["song.CI reference tone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["song.CI second tone"].exists)
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["Artists"].tap()
+        app.buttons["collection.artist.LocalTunes Studio"].tap()
+        XCTAssertTrue(app.navigationBars["LocalTunes Studio"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Top songs"].exists)
+        capture(app, name: "22-Artist")
+        app.tabBars.buttons["Playlists"].tap()
+        app.buttons["smart.mostPlayed"].tap()
+        XCTAssertTrue(app.navigationBars["Most played"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSongSwipeEditorAndSleepTimer() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Library"].tap()
+        let song = app.buttons["song.CI reference tone"]
+        XCTAssertTrue(song.waitForExistence(timeout: 5))
+        song.swipeLeft()
+        XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 5))
+        capture(app, name: "23-SwipeActions")
+        app.buttons["Next"].tap()
+        XCTAssertTrue(app.buttons["miniPlayer"].waitForExistence(timeout: 5))
+        app.buttons["miniPlayer"].tap()
+        app.buttons["Now Playing options"].tap()
+        app.buttons["Sleep timer"].tap()
+        XCTAssertTrue(app.buttons["sleep.endOfSong"].waitForExistence(timeout: 5))
+        capture(app, name: "24-SleepTimer")
+        app.buttons["sleep.endOfSong"].tap()
+        app.buttons["Now Playing options"].tap()
+        app.buttons["Sleep timer (on)"].tap()
+        XCTAssertTrue(app.buttons["sleep.cancel"].waitForExistence(timeout: 5))
+        app.buttons["sleep.cancel"].tap()
+        app.buttons["Now Playing options"].tap()
+        app.buttons["Edit details"].tap()
+        XCTAssertTrue(app.textFields["song.edit.title"].waitForExistence(timeout: 5))
+        capture(app, name: "25-EditSong")
+        app.buttons["song.edit.save"].tap()
+        XCTAssertTrue(app.staticTexts["nowPlaying.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["nowPlaying.title"].label, "CI reference tone")
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

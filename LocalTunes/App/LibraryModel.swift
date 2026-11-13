@@ -24,6 +24,8 @@ final class LibraryModel: ObservableObject {
     @Published var importFiles = false
     @Published var importFolder = false
     @Published var errorMessage: String?
+    @Published var home = HomePreferences()
+    @Published var recentSearches: [String] = []
 
     init(paths: LibraryPaths, db: LibraryDatabase) {
         self.paths = paths; self.db = db
@@ -34,6 +36,8 @@ final class LibraryModel: ObservableObject {
     func load() async {
         do {
             playlists = try await db.state("playlists", as: [Playlist].self) ?? []
+            home = try await db.state("home.v1", as: HomePreferences.self) ?? HomePreferences()
+            recentSearches = try await db.state("search.history", as: [String].self) ?? []
             await refresh()
             await player.restore()
         } catch { errorMessage = error.localizedDescription }
@@ -71,11 +75,13 @@ final class LibraryModel: ObservableObject {
     }
 
     func play(search: String = "", favourite: Bool = false, group: LibraryGroup? = nil, value: String? = nil,
-              sort: LibrarySort = .title, startingAt id: String? = nil, shuffled: Bool = false) async {
+              sort: LibrarySort = .title, startingAt id: String? = nil, shuffled: Bool = false,
+              searchFilters: SearchFilters = SearchFilters(), smart: SmartCollection? = nil) async {
         do {
-            var ids = try await db.allIDs(search: search, favourite: favourite, group: group, value: value, sort: sort)
+            var ids = try await db.allIDs(search: search, favourite: favourite, group: group, value: value, sort: sort, searchFilters: searchFilters, smart: smart)
             if shuffled { ids.shuffle() }
-            await player.play(ids: ids, startingAt: id)
+            await rememberSearch(search)
+            await player.play(ids: ids, startingAt: id, shuffled: shuffled)
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -93,6 +99,7 @@ final class LibraryModel: ObservableObject {
                 throw error
             }
             if exists { try? FileManager.default.removeItem(at: trash) }
+            if let artwork = song.artworkPath { removeArtwork(artwork) }
             for url in [paths.lyricURL(song.id), paths.artwork.appendingPathComponent(song.id + ".jpg"), paths.artwork.appendingPathComponent(song.id + ".thumb.jpg")] {
                 try? FileManager.default.removeItem(at: url)
             }
@@ -145,5 +152,55 @@ final class LibraryModel: ObservableObject {
         guard let index = values.firstIndex(where: { $0.id == playlistID }) else { return }
         if !values[index].songIDs.contains(songID) { values[index].songIDs.append(songID) }
         await savePlaylists(values)
+    }
+
+    func rememberSearch(_ query: String) async {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        recentSearches.removeAll { $0.localizedCaseInsensitiveCompare(query) == .orderedSame }
+        recentSearches.insert(query, at: 0); recentSearches = Array(recentSearches.prefix(12))
+        do { try await db.setState("search.history", value: recentSearches) } catch { errorMessage = error.localizedDescription }
+    }
+
+    func clearSearches() async {
+        do { try await db.setState("search.history", value: [String]()); recentSearches = [] }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func saveHome(_ preferences: HomePreferences) async {
+        do { try await db.setState("home.v1", value: preferences); home = preferences }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func togglePin(_ pin: HomePin) async {
+        var preferences = home
+        if preferences.pins.contains(pin) { preferences.pins.removeAll { $0 == pin } }
+        else { preferences.pins.append(pin); preferences.hidden.remove(.pinned) }
+        await saveHome(preferences)
+    }
+
+    func updateSong(_ id: String, edits: SongEdits, artwork: Data?) async throws {
+        var edits = edits
+        let old = try await db.song(id)?.artworkPath
+        var created: String?
+        if let artwork {
+            created = try MetadataExtractor.writeArtwork(artwork, id: UUID().uuidString, paths: paths)
+            guard let created else { throw LibraryError.message("Choose a supported image.") }
+            edits.artworkPath = created
+        }
+        do {
+            let updated = try await db.editSong(id, edits: edits)
+            player.refreshSong(updated); revision += 1
+        } catch {
+            if let created { removeArtwork(created) }
+            throw error
+        }
+        if let old, old != edits.artworkPath { removeArtwork(old) }
+    }
+
+    private func removeArtwork(_ path: String) {
+        for relative in [path, path.replacingOccurrences(of: ".jpg", with: ".thumb.jpg")] {
+            try? FileManager.default.removeItem(at: paths.documents.appendingPathComponent(relative))
+        }
     }
 }

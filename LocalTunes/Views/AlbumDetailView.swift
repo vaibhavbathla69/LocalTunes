@@ -51,6 +51,7 @@ struct AlbumDetailView: View {
                 if refreshing { ProgressView().accessibilityLabel("Reading album track numbers") }
                 else {
                     Menu {
+                        Button(library.home.pins.contains(HomePin(kind: .album, value: albumName)) ? "Unpin from Home" : "Pin to Home", systemImage: "pin") { Task { await library.togglePin(HomePin(kind: .album, value: albumName)) } }
                         Button("Reorder tracks", systemImage: "arrow.up.arrow.down") { reordering = true }
                         Button("Use disc & track numbers", systemImage: "list.number") { Task { await resetOrder() } }
                         Button("Refresh track numbers from files", systemImage: "arrow.clockwise") { Task { await refreshTags() } }

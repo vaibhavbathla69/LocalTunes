@@ -42,18 +42,19 @@ struct SearchField: View {
     var prompt = "Songs, artists, albums"
     @FocusState private var focused: Bool
     var focusRequest = 0
+    var onSearch: () -> Void = {}
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass").font(.title3.weight(.semibold)).foregroundStyle(Palette.muted)
             TextField(prompt, text: $text, prompt: Text(prompt).foregroundColor(Palette.muted)).font(.body.weight(.medium)).foregroundStyle(.white)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search)
-                .focused($focused).onSubmit { focused = false }
+                .focused($focused).onSubmit { focused = false; onSearch() }
                 .accessibilityLabel(prompt).accessibilityIdentifier("localSearchField")
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.muted).frame(width: 32, height: 36) }.accessibilityLabel("Clear search")
             }
             if focused {
-                Button("Done") { focused = false }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("search.dismissKeyboard")
+                Button("Done") { focused = false; onSearch() }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("search.dismissKeyboard")
             }
         }.padding(.horizontal, 16).padding(.vertical, 9).frame(minHeight: 54)
             .background(.white.opacity(0.085), in: RoundedRectangle(cornerRadius: 14))

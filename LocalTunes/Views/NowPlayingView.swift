@@ -11,6 +11,10 @@ struct NowPlayingView: View {
     @State private var lyrics = false
     @State private var queue = false
     @State private var album: AlbumDestination?
+    @State private var timer = false
+    @State private var editing = false
+    @State private var playbackOptions = false
+    @State private var artistName: String?
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
@@ -52,7 +56,11 @@ struct NowPlayingView: View {
                         if let song = player.currentSong {
                             Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
                             Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
+                            Button("View artist", systemImage: "person.fill") { artistName = song.artist }
+                            Button("Edit details", systemImage: "pencil") { editing = true }
                         }
+                        Button(player.sleepTimer.isActive ? "Sleep timer (on)" : "Sleep timer", systemImage: "moon.zzz") { timer = true }
+                        Button("Playback settings", systemImage: "slider.horizontal.3") { playbackOptions = true }
                         Button("Queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
                     } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Now Playing options")
@@ -60,6 +68,14 @@ struct NowPlayingView: View {
             }
             .sheet(isPresented: $lyrics) { LyricsView() }
             .sheet(isPresented: $queue) { QueueView() }
+            .sheet(isPresented: $timer) { SleepTimerView() }
+            .sheet(isPresented: $editing) { if let song = player.currentSong { SongEditorView(song: song) } }
+            .sheet(isPresented: $playbackOptions) {
+                NavigationStack { PlaybackOptionsView().toolbar { Button("Done") { playbackOptions = false } } }
+            }
+            .sheet(item: Binding(get: { artistName.map { AlbumDestination(name: $0) } }, set: { artistName = $0?.name })) { destination in
+                NavigationStack { ArtistDetailView(name: destination.name).toolbar { Button("Done") { artistName = nil } } }
+            }
             .sheet(item: $album) { destination in
                 NavigationStack {
                     AlbumDetailView(albumName: destination.name, accessibilityPrefix: "player.album")

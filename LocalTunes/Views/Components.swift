@@ -46,7 +46,7 @@ struct ArtworkView: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? (size > 100 ? 14 : 7)))
         .accessibilityHidden(true)
-        .task(id: "\(song?.id ?? "")-\(fullSize)") {
+        .task(id: "\(song?.artworkPath ?? song?.id ?? "")-\(fullSize)") {
             image = nil
             guard let path = song?.artworkPath else { return }
             let url = library.paths.documents.appendingPathComponent(fullSize ? path : path.replacingOccurrences(of: ".jpg", with: ".thumb.jpg"))
@@ -66,6 +66,7 @@ struct SongRow: View {
     var action: () -> Void
     @State private var deleting = false
     @State private var choosingPlaylist = false
+    @State private var editing = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -84,18 +85,28 @@ struct SongRow: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(song.title), \(song.artist), \(song.duration.clock)")
         .accessibilityIdentifier(accessibilityID ?? "song.\(song.title)")
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button { Task { await library.favourite(song) } } label: { Label(song.isFavourite ? "Unlike" : "Like", systemImage: song.isFavourite ? "heart.slash" : "heart.fill") }.tint(.pink)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button { choosingPlaylist = true } label: { Label("Playlist", systemImage: "music.note.list") }.tint(.indigo)
+            Button { Task { await player.append(song.id, next: true) } } label: { Label("Next", systemImage: "text.line.first.and.arrowtriangle.forward") }.tint(.teal)
+            Button { Task { await player.append(song.id, next: false) } } label: { Label("Queue", systemImage: "text.badge.plus") }.tint(.orange)
+        }
         .contextMenu {
             Button("Play", systemImage: "play.fill", action: action)
             Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { Task { await player.append(song.id, next: true) } }
             Button("Add to queue", systemImage: "text.badge.plus") { Task { await player.append(song.id, next: false) } }
             Button(song.isFavourite ? "Remove favourite" : "Favourite", systemImage: song.isFavourite ? "heart.slash" : "heart") { Task { await library.favourite(song) } }
             Button("Add to playlist", systemImage: "music.note.list") { choosingPlaylist = true }
+            Button("Edit details", systemImage: "pencil") { editing = true }
             Button("Delete from library", systemImage: "trash", role: .destructive) { deleting = true }
         }
         .confirmationDialog("Delete ‘\(song.title)’? This removes the app's copy of the audio and lyrics.", isPresented: $deleting, titleVisibility: .visible) {
             Button("Delete song", role: .destructive) { Task { await library.delete(song) } }
         }
         .sheet(isPresented: $choosingPlaylist) { PlaylistPicker(songID: song.id) }
+        .sheet(isPresented: $editing) { SongEditorView(song: song) }
     }
 }
 

@@ -17,6 +17,7 @@ struct Song: Identifiable, Codable, Hashable, Sendable {
     var lastPlayedAt: Date?
     var isFavourite: Bool = false
     var discNumber: Int? = nil
+    var year: Int? = nil
 
     var effectiveTrackNumber: Int { trackNumber > 0 ? min(65535, trackNumber) : (AlbumPosition.filename(originalFilename).track ?? 0) }
     var effectiveDiscNumber: Int { min(65535, max(1, discNumber ?? AlbumPosition.filename(originalFilename).disc ?? 1)) }
@@ -122,7 +123,7 @@ struct PlaybackQueue: Codable, Equatable, Sendable {
     }
 }
 
-enum LibrarySort: String, CaseIterable, Sendable { case title, added, played, albumTrack }
+enum LibrarySort: String, CaseIterable, Sendable { case title, added, played, albumTrack, mostPlayed }
 enum LibraryGroup: String, CaseIterable, Sendable { case album, artist, genre }
 struct GroupSummary: Identifiable, Sendable {
     var name: String

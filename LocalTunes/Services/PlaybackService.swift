@@ -13,6 +13,11 @@ final class PlaybackService: ObservableObject {
     @Published private(set) var position: Double = 0
     @Published private(set) var duration: Double = 0
     @Published var errorMessage: String?
+    @Published private(set) var crossfadeSeconds = min(8, max(0, UserDefaults.standard.double(forKey: "crossfade.seconds")))
+    @Published private(set) var volumeBalancing = UserDefaults.standard.bool(forKey: "volume.balancing")
+    @Published private(set) var sleepTimer = SleepTimerState()
+    @Published private(set) var isCrossfading = false
+    @Published private(set) var analysisProgress: String?
 
     private var player = AVQueuePlayer()
     private let db: LibraryDatabase
@@ -32,6 +37,22 @@ final class PlaybackService: ObservableObject {
     private var lastSavedPosition: Double = -100
     private var resumeAfterInterruption = false
     private var wantsPlayback = false
+    private var preparedFade: (player: AVQueuePlayer, entry: QueueEntry, song: Song)?
+    private var fadingPlayer: AVQueuePlayer?
+    private var fadeTask: Task<Void, Never>?
+    private var sleepTask: Task<Void, Never>?
+    private var analysisTask: Task<Void, Never>?
+    private var measuring: Set<String> = []
+    private var gains: [String: Float] = [:]
+    private var listeningTask: Task<Void, Never>?
+    private var statsSongID: String?
+    private var statsEntryID: String?
+    private var pendingSeconds: Double = 0
+    private var pendingPlays = 0
+    private var heardInEntry: Double = 0
+    private var countedEntry = false
+    private var lastTickTime = ProcessInfo.processInfo.systemUptime
+    private var lastTickPosition: Double = 0
 
     init(db: LibraryDatabase, paths: LibraryPaths) {
         self.db = db; self.paths = paths
@@ -42,7 +63,7 @@ final class PlaybackService: ObservableObject {
 
     private func configurePlayer() {
         player.actionAtItemEnd = .advance
-        player.automaticallyWaitsToMinimizeStalling = true
+        player.automaticallyWaitsToMinimizeStalling = false
         observations.append(player.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in await self?.currentItemChanged() }
         })
@@ -60,6 +81,8 @@ final class PlaybackService: ObservableObject {
     }
 
     deinit {
+        fadeTask?.cancel(); sleepTask?.cancel(); analysisTask?.cancel()
+        fadingPlayer?.pause(); preparedFade?.player.pause()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         notifications.forEach(NotificationCenter.default.removeObserver)
         for (command, target) in remoteTargets { command.removeTarget(target) }
@@ -95,12 +118,15 @@ final class PlaybackService: ObservableObject {
         do {
             try activateSession()
             if player.currentItem == nil || position >= duration - 0.1 { await rebuild(autoplay: true) }
-            else { player.play(); updateNowPlaying() }
+            else { await replaceUpcoming(); player.play(); updateNowPlaying() }
         } catch { wantsPlayback = false; report(error) }
     }
 
     func pause() {
         synchronizeCurrentItem()
+        accountListening(player.currentTime().seconds)
+        enqueueListening()
+        cancelFade()
         wantsPlayback = false
         resumeAfterInterruption = false
         player.pause(); isPlaying = false; savePosition(); updateNowPlaying()
@@ -108,11 +134,13 @@ final class PlaybackService: ObservableObject {
 
     func seek(_ value: Double) {
         synchronizeCurrentItem()
+        cancelFade()
         guard value.isFinite, duration > 0 else { return }
         let target = min(max(value, 0), duration)
         position = target; queue.position = target
+        resetTick(target)
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-            Task { @MainActor in self?.updateNowPlaying() }
+            Task { @MainActor in self?.updateNowPlaying(); await self?.replaceUpcoming() }
         }
         savePosition()
     }
@@ -175,6 +203,7 @@ final class PlaybackService: ObservableObject {
     }
 
     func savePosition() {
+        enqueueListening()
         queue.position = position
         let checkpoint = PlaybackPosition(entryID: queue.currentID, seconds: position)
         lastSavedPosition = position
@@ -197,7 +226,10 @@ final class PlaybackService: ObservableObject {
     }
 
     private func rebuild(autoplay: Bool, seekTo: Double = 0) async {
-        wantsPlayback = autoplay
+        accountListening(player.currentTime().seconds); enqueueListening(); cancelFade()
+        let timerExpired = sleepTimer.expired(at: Date(), currentEntry: queue.currentID)
+        if timerExpired { clearSleepState() }
+        wantsPlayback = autoplay && !timerExpired
         generation += 1
         let token = generation
         isRebuilding = true
@@ -214,6 +246,10 @@ final class PlaybackService: ObservableObject {
             guard let song = try await db.song(entry.songID) else { throw LibraryError.message("This song is no longer in the library.") }
             guard token == generation else { return }
             currentSong = song; duration = song.duration
+            beginListening(song: song, entry: entry)
+            await loadGain(song)
+            guard token == generation else { return }
+            player.volume = gain(song)
             guard FileManager.default.fileExists(atPath: paths.audioURL(for: song).path) else {
                 throw LibraryError.message("The audio file is missing. Reimport the original file to repair this song.")
             }
@@ -223,6 +259,7 @@ final class PlaybackService: ObservableObject {
             observeStatus(item)
             let target = seekTo.isFinite ? min(max(0, seekTo), max(0, song.duration - 0.05)) : 0
             position = target
+            resetTick(target)
             if target > 0 { await player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
             guard token == generation else { return }
             isRebuilding = false
@@ -241,13 +278,14 @@ final class PlaybackService: ObservableObject {
 
     private func makeItem(_ song: Song, entry: QueueEntry) -> AVPlayerItem {
         let item = AVPlayerItem(url: paths.audioURL(for: song))
+        item.preferredForwardBufferDuration = 5
         itemEntries[ObjectIdentifier(item)] = entry
         itemSongs[ObjectIdentifier(item)] = song
         return item
     }
 
     private func fillUpcoming() async {
-        guard !isRebuilding, player.items().count < 2, let entry = queue.following(automatic: true) else { return }
+        guard !isRebuilding, sleepTimer.entryID == nil, player.items().count < 2, let entry = queue.following(automatic: true) else { return }
         let token = generation
         guard refillGeneration != token else { return }
         refillGeneration = token
@@ -258,10 +296,19 @@ final class PlaybackService: ObservableObject {
             // Leave a missing upcoming item for a clear error at transition; never silently erase it.
             let item = makeItem(song, entry: entry)
             if player.canInsert(item, after: player.items().last) { player.insert(item, after: player.items().last) }
+            await loadGain(song)
+            guard token == generation else { return }
+            if crossfadeSeconds > 0, entry.id != queue.currentID, queue.repeatMode != .one {
+                let incoming = AVQueuePlayer(items: [AVPlayerItem(url: paths.audioURL(for: song))])
+                incoming.automaticallyWaitsToMinimizeStalling = false; incoming.volume = 0
+                preparedFade = (incoming, entry, song)
+                incoming.preroll(atRate: 1) { _ in }
+            }
         } catch { report(error) }
     }
 
     private func replaceUpcoming() async {
+        cancelFade()
         if isRebuilding {
             await rebuild(autoplay: wantsPlayback, seekTo: position)
             return
@@ -279,6 +326,8 @@ final class PlaybackService: ObservableObject {
     private func currentItemChanged() async {
         guard !isRebuilding else { return }
         guard player.currentItem != nil else {
+            enqueueListening()
+            if sleepTimer.entryID != nil { clearSleepState() }
             wantsPlayback = false
             isPlaying = false; position = duration; savePosition(); updateNowPlaying(); return
         }
@@ -291,9 +340,14 @@ final class PlaybackService: ObservableObject {
         guard !isRebuilding, let item = player.currentItem else { return }
         let key = ObjectIdentifier(item)
         guard key != handledItem, let entry = itemEntries[key], let song = itemSongs[key] else { return }
+        enqueueListening()
+        if sleepTimer.expired(at: Date(), currentEntry: entry.id) { pauseForTimer(); return }
         handledItem = key
         queue.currentID = entry.id; queue.position = 0
         currentSong = song; duration = song.duration; position = 0
+        beginListening(song: song, entry: entry)
+        if !isCrossfading { player.volume = gain(song) }
+        preparedFade?.player.pause(); preparedFade = nil
         let valid = Set(player.items().map(ObjectIdentifier.init))
         itemEntries = itemEntries.filter { valid.contains($0.key) }
         itemSongs = itemSongs.filter { valid.contains($0.key) }
@@ -312,11 +366,16 @@ final class PlaybackService: ObservableObject {
         }
     }
 
-    private func tick(_ seconds: Double) {
+    private func tick(_ observedSeconds: Double) {
+        let seconds = player.currentTime().seconds
         guard !isRebuilding, seconds.isFinite, player.currentItem != nil else { return }
+        synchronizeCurrentItem()
+        accountListening(seconds)
         position = max(0, seconds)
         if let actual = player.currentItem?.duration.seconds, actual.isFinite, actual > 0 { duration = actual }
         if isPlaying && abs(position - lastSavedPosition) >= 10 { savePosition() }
+        if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
+        if isPlaying { startCrossfadeIfReady() }
     }
 
     private func updateNowPlaying(loadArtwork: Bool = false) {
@@ -380,6 +439,7 @@ final class PlaybackService: ObservableObject {
                       let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
                 if type == .began {
                     self.resumeAfterInterruption = self.wantsPlayback
+                    self.accountListening(self.player.currentTime().seconds); self.enqueueListening(); self.cancelFade()
                     self.wantsPlayback = false
                     self.player.pause(); self.isPlaying = false; self.savePosition()
                 } else {
@@ -399,12 +459,13 @@ final class PlaybackService: ObservableObject {
         notifications.append(center.addObserver(forName: AVAudioSession.mediaServicesWereLostNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                self.savePosition(); self.player.pause()
+                self.savePosition(); self.cancelFade(); self.player.pause()
             }
         })
         notifications.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                self.cancelFade()
                 self.observations.removeAll(); self.statusObservation = nil
                 if let observer = self.timeObserver { self.player.removeTimeObserver(observer); self.timeObserver = nil }
                 self.player = AVQueuePlayer()
@@ -420,6 +481,172 @@ final class PlaybackService: ObservableObject {
                 self.pause(); self.report(item.error ?? LibraryError.message("Playback failed before this song ended."))
             }
         })
+    }
+
+    func setCrossfade(_ seconds: Double) async {
+        crossfadeSeconds = seconds.isFinite ? min(8, max(0, seconds)) : 0
+        UserDefaults.standard.set(crossfadeSeconds, forKey: "crossfade.seconds")
+        await replaceUpcoming()
+    }
+
+    func setVolumeBalancing(_ enabled: Bool) async {
+        volumeBalancing = enabled; UserDefaults.standard.set(enabled, forKey: "volume.balancing")
+        if let song = currentSong { await loadGain(song); if !isCrossfading { player.volume = gain(song) } }
+    }
+
+    private func gain(_ song: Song?) -> Float {
+        guard volumeBalancing, let song else { return 1 }
+        return gains[song.fingerprint] ?? 1
+    }
+
+    private func loadGain(_ song: Song) async {
+        guard volumeBalancing, gains[song.fingerprint] == nil else { return }
+        do {
+            if let measurement = try await db.state("loudness.\(song.fingerprint)", as: LoudnessMeasurement.self) { gains[song.fingerprint] = measurement.gain }
+            else { requestMeasurement(song) }
+        } catch { report(error) }
+    }
+
+    private func requestMeasurement(_ song: Song) {
+        guard !measuring.contains(song.fingerprint) else { return }
+        measuring.insert(song.fingerprint)
+        Task { [weak self] in
+            guard let self else { return }
+            defer { measuring.remove(song.fingerprint) }
+            do { try await measure(song) } catch { logger.error("Audio analysis: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    private func measure(_ song: Song) async throws {
+        let measurement: LoudnessMeasurement
+        if let cached = try await db.state("loudness.\(song.fingerprint)", as: LoudnessMeasurement.self) { measurement = cached }
+        else {
+            measurement = try await AudioAnalysisService.shared.measure(paths.audioURL(for: song))
+            try await db.setState("loudness.\(song.fingerprint)", value: measurement)
+        }
+        gains[song.fingerprint] = measurement.gain
+        if currentSong?.id == song.id, !isCrossfading { player.volume = gain(song) }
+    }
+
+    func analyzeLibrary() {
+        guard analysisTask == nil else { return }
+        analysisProgress = "Starting"
+        analysisTask = Task { [weak self] in
+            guard let self else { return }
+            defer { analysisProgress = nil; analysisTask = nil }
+            do {
+                let ids = try await db.allIDs()
+                var failures = 0
+                for (index, id) in ids.enumerated() {
+                    try Task.checkCancellation()
+                    analysisProgress = "\(index + 1) / \(ids.count)"
+                    if let song = try await db.song(id) {
+                        do { try await measure(song) }
+                        catch is CancellationError { throw CancellationError() }
+                        catch { failures += 1 }
+                    }
+                }
+                if failures > 0 { errorMessage = "Could not measure \(failures) files. Playback volume stays unchanged for those files." }
+            } catch is CancellationError { }
+            catch { report(error) }
+        }
+    }
+    func cancelAnalysis() { analysisTask?.cancel() }
+
+    private func cancelFade() {
+        fadeTask?.cancel(); fadeTask = nil
+        fadingPlayer?.pause(); fadingPlayer?.removeAllItems(); fadingPlayer = nil
+        preparedFade?.player.pause(); preparedFade?.player.removeAllItems(); preparedFade = nil
+        isCrossfading = false; player.volume = gain(currentSong)
+    }
+
+    private func startCrossfadeIfReady() {
+        guard !isCrossfading, sleepTimer.entryID == nil, crossfadeSeconds > 0,
+              let prepared = preparedFade, prepared.entry.id == queue.following(automatic: true)?.id,
+              let item = prepared.player.currentItem, item.status == .readyToPlay, queue.repeatMode != .one else { return }
+        let length = min(crossfadeSeconds, min(duration / 2, prepared.song.duration / 2))
+        let remaining = duration - position
+        guard length >= 0.25, remaining <= length, remaining > 0.1 else { return }
+        let outgoing = player, outgoingGain = gain(currentSong)
+        observations.removeAll(); statusObservation = nil
+        if let observer = timeObserver { outgoing.removeTimeObserver(observer); timeObserver = nil }
+        for next in outgoing.items() where next !== outgoing.currentItem { outgoing.remove(next) }
+        outgoing.actionAtItemEnd = .pause
+        preparedFade = nil; fadingPlayer = outgoing; player = prepared.player
+        generation += 1; isCrossfading = true
+        itemEntries[ObjectIdentifier(item)] = prepared.entry; itemSongs[ObjectIdentifier(item)] = prepared.song
+        configurePlayer(); synchronizeCurrentItem()
+        player.volume = 0; player.playImmediately(atRate: 1)
+        let started = ProcessInfo.processInfo.systemUptime
+        fadeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let progress = min(1, (ProcessInfo.processInfo.systemUptime - started) / remaining)
+                outgoing.volume = outgoingGain * Float(1 - progress)
+                player.volume = gain(currentSong) * Float(progress)
+                if progress >= 1 {
+                    outgoing.pause(); outgoing.removeAllItems(); fadingPlayer = nil; isCrossfading = false; fadeTask = nil
+                    await fillUpcoming(); return
+                }
+                do { try await Task.sleep(for: .milliseconds(40)) } catch { return }
+            }
+        }
+    }
+
+    func setSleepTimer(minutes: Int? = nil, endOfSong: Bool = false) async {
+        clearSleepState()
+        if endOfSong { sleepTimer.entryID = queue.currentID }
+        else if let minutes, minutes > 0 { sleepTimer.deadline = Date().addingTimeInterval(Double(min(minutes, 1440)) * 60) }
+        await replaceUpcoming()
+        if sleepTimer.deadline != nil {
+            sleepTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                    guard let self else { return }
+                    if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
+                }
+            }
+        }
+    }
+    private func clearSleepState() { sleepTask?.cancel(); sleepTask = nil; sleepTimer = SleepTimerState() }
+    private func pauseForTimer() { clearSleepState(); pause() }
+
+    private func resetTick(_ seconds: Double) {
+        lastTickTime = ProcessInfo.processInfo.systemUptime; lastTickPosition = seconds.isFinite ? seconds : 0
+    }
+    private func beginListening(song: Song, entry: QueueEntry) {
+        if statsEntryID != entry.id {
+            enqueueListening(); statsSongID = song.id; statsEntryID = entry.id
+            heardInEntry = 0; countedEntry = false
+        }
+        resetTick(0)
+    }
+    private func accountListening(_ seconds: Double) {
+        let now = ProcessInfo.processInfo.systemUptime
+        defer { lastTickTime = now; if seconds.isFinite { lastTickPosition = seconds } }
+        guard isPlaying, player.rate > 0, seconds.isFinite, statsSongID != nil else { return }
+        let delta = seconds - lastTickPosition
+        guard delta >= 0, delta <= 1.5 else { return } // A seek is never listening time.
+        let elapsed = max(0, min(delta, now - lastTickTime))
+        pendingSeconds += elapsed; heardInEntry += elapsed
+        if !countedEntry, heardInEntry >= min(30, max(0.5, duration / 2)) { pendingPlays += 1; countedEntry = true }
+        if pendingSeconds >= 5 { enqueueListening() }
+    }
+    private func enqueueListening() {
+        guard let id = statsSongID, pendingSeconds > 0 || pendingPlays > 0 else { return }
+        let seconds = pendingSeconds, plays = pendingPlays, previous = listeningTask
+        pendingSeconds = 0; pendingPlays = 0
+        listeningTask = Task {
+            await previous?.value
+            do { try await db.recordListening(id, seconds: seconds, plays: plays) } catch { report(error) }
+        }
+    }
+    func flushListening() async {
+        accountListening(player.currentTime().seconds); enqueueListening(); await listeningTask?.value
+    }
+    func clearListeningHistory() async throws {
+        await flushListening(); try await db.clearListening()
+        heardInEntry = 0; countedEntry = false
     }
 
     private func report(_ error: Error) {
