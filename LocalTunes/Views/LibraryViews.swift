@@ -272,7 +272,7 @@ private struct GroupCard: View {
                 Text(group.name).font(.subheadline.bold()).lineLimit(2)
                 Text("\(group.count) songs").font(.caption).foregroundStyle(Palette.muted)
             }.frame(maxWidth: .infinity, alignment: .leading)
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).accessibilityIdentifier("collection.\(kind.rawValue).\(group.name)")
             .task(id: group.id) {
                 do { representative = try await library.db.songs(group: kind, value: group.name, limit: 1).first } catch { library.errorMessage = error.localizedDescription }
             }

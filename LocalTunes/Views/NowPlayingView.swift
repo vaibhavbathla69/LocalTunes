@@ -78,7 +78,7 @@ struct NowPlayingView: View {
             Button { Task { await player.toggle() } } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 29, weight: .semibold)).foregroundStyle(Palette.background).frame(width: 74, height: 74).background(.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 15, y: 6)
             }.accessibilityLabel(player.isPlaying ? "Pause" : "Play").accessibilityIdentifier("nowPlaying.playPause")
-            Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Next song")
+            Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Next song").accessibilityIdentifier("nowPlaying.next")
             Button { Task { await player.cycleRepeat() } } label: { Image(systemName: player.queue.repeatMode.symbol).font(.title3).frame(maxWidth: .infinity, minHeight: 48).foregroundStyle(player.queue.repeatMode != .off ? Palette.accent : .white.opacity(0.65)) }.accessibilityLabel("Repeat \(player.queue.repeatMode.rawValue)")
         }
     }

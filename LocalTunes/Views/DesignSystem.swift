@@ -45,7 +45,7 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass").font(.title3.weight(.semibold)).foregroundStyle(Palette.muted)
-            TextField(prompt, text: $text).font(.body.weight(.medium)).foregroundStyle(.white)
+            TextField(prompt, text: $text, prompt: Text(prompt).foregroundColor(Palette.muted)).font(.body.weight(.medium)).foregroundStyle(.white)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search)
                 .focused($focused).onSubmit { focused = false }
                 .accessibilityLabel(prompt).accessibilityIdentifier("localSearchField")
