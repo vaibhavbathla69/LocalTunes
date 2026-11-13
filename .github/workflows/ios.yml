@@ -27,7 +27,7 @@ jobs:
           xcodebuild -version
           xcodegen generate
           xcodebuild -resolvePackageDependencies -project LocalTunes.xcodeproj -scheme LocalTunes
-      - name: Test on an available iPhone simulator
+      - name: Test FLAC playback
         run: |
           set -euo pipefail
           DEVICE_ID=$(python3 scripts/simulator.py)
@@ -36,6 +36,10 @@ jobs:
             -only-testing:LocalTunesTests/FLACPlaybackTests \
             -derivedDataPath build/TestData -resultBundlePath build/FLACTests.xcresult \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee flac-test.log
+      - name: Test library and interface
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 scripts/simulator.py)
           xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
             -skip-testing:LocalTunesTests/FLACPlaybackTests \

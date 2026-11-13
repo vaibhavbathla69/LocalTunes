@@ -54,6 +54,11 @@ final class PlaybackService: ObservableObject {
     private var countedEntry = false
     private var lastTickTime = ProcessInfo.processInfo.systemUptime
     private var lastTickPosition: Double = 0
+    #if DEBUG
+    var activePlayerCount: Int {
+        [player, fadingPlayer].compactMap { $0 }.filter { $0.timeControlStatus == .playing }.count
+    }
+    #endif
 
     init(db: LibraryDatabase, paths: LibraryPaths) {
         self.db = db; self.paths = paths

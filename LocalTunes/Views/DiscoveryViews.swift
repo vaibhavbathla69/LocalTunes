@@ -57,7 +57,7 @@ struct SearchFilterEditor: View {
                 picker("Artist", selection: $draft.artist, groups: artists)
                 picker("Album", selection: $draft.album, groups: albums)
                 picker("Genre", selection: $draft.genre, groups: genres)
-                TextField("Year", text: $year).keyboardType(.numberPad).accessibilityIdentifier("search.filter.year")
+                LabeledContent("Year") { TextField("Any", text: $year).multilineTextAlignment(.trailing).keyboardType(.numberPad).accessibilityLabel("Year").accessibilityIdentifier("search.filter.year") }
                 Button("Reset filters") { draft = SearchFilters(); year = "" }
             }.navigationTitle("Filters").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -146,13 +146,17 @@ struct ListeningStatsView: View {
                 LabeledContent("Listening time", value: report.seconds.clock)
                 LabeledContent("Plays", value: String(report.plays))
             }
-            Section("Top songs") {
-                ForEach(report.songs) { leader in
-                    Button { Task { await library.play(startingAt: leader.id) } } label: { leaderRow(leader) }.buttonStyle(.plain)
+            if !report.songs.isEmpty {
+                Section("Top songs") {
+                    ForEach(report.songs) { leader in
+                        Button { Task { await library.play(startingAt: leader.id) } } label: { leaderRow(leader) }.buttonStyle(.plain)
+                    }
                 }
             }
-            Section("Top artists") {
-                ForEach(report.artists) { leader in NavigationLink { ArtistDetailView(name: leader.title) } label: { leaderRow(leader) } }
+            if !report.artists.isEmpty {
+                Section("Top artists") {
+                    ForEach(report.artists) { leader in NavigationLink { ArtistDetailView(name: leader.title) } label: { leaderRow(leader) } }
+                }
             }
             Section { Button("Clear listening stats", role: .destructive) { clearing = true } }
         }.navigationTitle("Listening stats").accessibilityIdentifier("stats.screen")
@@ -203,13 +207,13 @@ struct SongEditorView: View {
         NavigationStack {
             Form {
                 Section("Details") {
-                    TextField("Title", text: $draft.title).accessibilityIdentifier("song.edit.title")
-                    TextField("Artist", text: $draft.artist)
-                    TextField("Album", text: $draft.album)
-                    TextField("Genre", text: $draft.genre)
-                    TextField("Track", text: $track).keyboardType(.numberPad)
-                    TextField("Disc", text: $disc).keyboardType(.numberPad)
-                    TextField("Year", text: $year).keyboardType(.numberPad)
+                    field("Title", text: $draft.title)
+                    field("Artist", text: $draft.artist)
+                    field("Album", text: $draft.album)
+                    field("Genre", text: $draft.genre)
+                    field("Track", text: $track, numeric: true)
+                    field("Disc", text: $disc, numeric: true)
+                    field("Year", text: $year, numeric: true)
                 }
                 Section("Artwork") {
                     if let image, let preview = UIImage(data: image) { Image(uiImage: preview).resizable().scaledToFit().frame(height: 160) }
@@ -237,6 +241,12 @@ struct SongEditorView: View {
                     } catch { self.error = error.localizedDescription }
                 }
                 .alert("Edit details", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
+        }
+    }
+    private func field(_ title: String, text: Binding<String>, numeric: Bool = false) -> some View {
+        LabeledContent(title) {
+            TextField(title, text: text).multilineTextAlignment(.trailing).keyboardType(numeric ? .numberPad : .default)
+                .accessibilityLabel(title).accessibilityIdentifier("song.edit.\(title.lowercased())")
         }
     }
     private func readTags() async {

@@ -49,11 +49,12 @@ final class FLACPlaybackTests: XCTestCase {
         let player = PlaybackService(db: db, paths: paths)
         await player.setCrossfade(1)
         await player.play(ids: songs.map(\.id))
-        let faded = await waitUntil { player.isCrossfading }
+        let faded = await waitUntil { player.isCrossfading && player.activePlayerCount == 2 }
         XCTAssertTrue(faded, player.errorMessage ?? "Prepared FLAC crossfade did not begin")
         XCTAssertEqual(player.currentSong?.id, songs[1].id)
         player.pause()
         XCTAssertFalse(player.isCrossfading); XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(player.activePlayerCount, 0)
         await player.setCrossfade(0)
     }
     @MainActor
