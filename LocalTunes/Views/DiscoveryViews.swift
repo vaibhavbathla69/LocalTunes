@@ -154,11 +154,11 @@ struct ListeningStatsView: View {
             Section("Top artists") {
                 ForEach(report.artists) { leader in NavigationLink { ArtistDetailView(name: leader.title) } label: { leaderRow(leader) } }
             }
-            Section { Button("Clear listening history", role: .destructive) { clearing = true } }
+            Section { Button("Clear listening stats", role: .destructive) { clearing = true } }
         }.navigationTitle("Listening stats").accessibilityIdentifier("stats.screen")
             .task { await reload() }
-            .confirmationDialog("Clear listening history?", isPresented: $clearing, titleVisibility: .visible) {
-                Button("Clear history", role: .destructive) { Task {
+            .confirmationDialog("Clear listening stats?", isPresented: $clearing, titleVisibility: .visible) {
+                Button("Clear stats", role: .destructive) { Task {
                     do { try await player.clearListeningHistory(); await reload(); library.revision += 1 }
                     catch { library.errorMessage = error.localizedDescription }
                 } }

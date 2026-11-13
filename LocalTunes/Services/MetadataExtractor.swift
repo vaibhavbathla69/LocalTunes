@@ -73,6 +73,19 @@ enum MetadataExtractor {
         return (AlbumPosition.number(flac?["TRACKNUMBER"]) ?? native.track, AlbumPosition.number(flac?["DISCNUMBER"]) ?? native.disc)
     }
 
+    static func readYear(_ url: URL) async throws -> Int? {
+        if let native = try FLACMetadata.read(url)?.year, (1...9999).contains(native) { return native }
+        let asset = AVURLAsset(url: url)
+        var items = try await asset.load(.commonMetadata)
+        for format in try await asset.load(.availableMetadataFormats) { items += try await asset.loadMetadata(for: format) }
+        for item in items {
+            let key = "\(item.commonKey?.rawValue ?? "") \(item.identifier?.rawValue ?? "")".lowercased()
+            if key.contains("creationdate") || key.contains("tdrc") || key.contains("tyer") || key.contains("day"),
+               let value = try? await item.load(.stringValue), let year = Int(value.prefix(4)), (1...9999).contains(year) { return year }
+        }
+        return nil
+    }
+
     static func position(in items: [AVMetadataItem], filename: String) async -> (track: Int?, disc: Int?) {
         var track: Int?, disc: Int?
         for item in items {

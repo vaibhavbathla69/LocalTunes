@@ -226,6 +226,7 @@ final class PlaybackService: ObservableObject {
     }
 
     private func rebuild(autoplay: Bool, seekTo: Double = 0) async {
+        let restartingFinishedEntry = duration > 0 && position >= duration - 0.1 && seekTo == 0
         accountListening(player.currentTime().seconds); enqueueListening(); cancelFade()
         let timerExpired = sleepTimer.expired(at: Date(), currentEntry: queue.currentID)
         if timerExpired { clearSleepState() }
@@ -246,7 +247,7 @@ final class PlaybackService: ObservableObject {
             guard let song = try await db.song(entry.songID) else { throw LibraryError.message("This song is no longer in the library.") }
             guard token == generation else { return }
             currentSong = song; duration = song.duration
-            beginListening(song: song, entry: entry)
+            beginListening(song: song, entry: entry, forceNew: restartingFinishedEntry)
             await loadGain(song)
             guard token == generation else { return }
             player.volume = gain(song)
@@ -345,7 +346,7 @@ final class PlaybackService: ObservableObject {
         handledItem = key
         queue.currentID = entry.id; queue.position = 0
         currentSong = song; duration = song.duration; position = 0
-        beginListening(song: song, entry: entry)
+        beginListening(song: song, entry: entry, forceNew: true)
         if !isCrossfading { player.volume = gain(song) }
         preparedFade?.player.pause(); preparedFade = nil
         let valid = Set(player.items().map(ObjectIdentifier.init))
@@ -614,8 +615,8 @@ final class PlaybackService: ObservableObject {
     private func resetTick(_ seconds: Double) {
         lastTickTime = ProcessInfo.processInfo.systemUptime; lastTickPosition = seconds.isFinite ? seconds : 0
     }
-    private func beginListening(song: Song, entry: QueueEntry) {
-        if statsEntryID != entry.id {
+    private func beginListening(song: Song, entry: QueueEntry, forceNew: Bool = false) {
+        if forceNew || statsEntryID != entry.id {
             enqueueListening(); statsSongID = song.id; statsEntryID = entry.id
             heardInEntry = 0; countedEntry = false
         }

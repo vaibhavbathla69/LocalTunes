@@ -318,6 +318,11 @@ actor LibraryDatabase {
         try execute("INSERT INTO listening(song_id,seconds,plays) VALUES(?,?,?) ON CONFLICT(song_id) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(seconds), String(plays)])
     }
 
+    func fillMissingYear(_ id: String, year: Int) throws -> Song? {
+        guard var current = try song(id), current.year == nil, (1...9999).contains(year) else { return nil }
+        current.year = year; try save(current); return current
+    }
+
     func listeningReport() throws -> ListeningReport {
         let totals = try prepare("SELECT COALESCE(SUM(seconds),0),COALESCE(SUM(plays),0) FROM listening")
         defer { sqlite3_finalize(totals) }

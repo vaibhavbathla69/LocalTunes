@@ -18,6 +18,8 @@ final class FLACPlaybackTests: XCTestCase {
         XCTAssertEqual(first.title, "FLAC tone 1"); XCTAssertEqual(first.artist, "Synthetic Artist")
         XCTAssertEqual(first.album, "FLAC Album"); XCTAssertEqual(first.trackNumber, 1); XCTAssertEqual(first.discNumber, 1)
         XCTAssertEqual(first.year, 2024); XCTAssertEqual(first.duration, 4, accuracy: 0.05)
+        let year = try await MetadataExtractor.readYear(paths.audioURL(for: first))
+        XCTAssertEqual(year, 2024)
         let measurement = try await AudioAnalysisService.shared.measure(paths.audioURL(for: first))
         XCTAssertEqual(measurement.rms, 0.25 / sqrt(2), accuracy: 0.002)
         XCTAssertEqual(measurement.peak, 0.25, accuracy: 0.002)
@@ -66,6 +68,19 @@ final class FLACPlaybackTests: XCTestCase {
         XCTAssertEqual(player.queue.current?.songID, songs[0].id)
         XCTAssertFalse(player.sleepTimer.isActive)
         player.pause()
+    }
+    @MainActor
+    func testRepeatOneCountsEachActualLoop() async throws {
+        let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let player = PlaybackService(db: db, paths: paths)
+        await player.setCrossfade(0)
+        await player.cycleRepeat(); await player.cycleRepeat()
+        await player.play(ids: [songs[0].id])
+        try await Task.sleep(for: .seconds(7))
+        player.pause(); await player.flushListening()
+        let report = try await db.listeningReport()
+        XCTAssertEqual(report.plays, 2)
+        XCTAssertGreaterThan(report.seconds, 5)
     }
     @MainActor
     func testBalancingCachesMeasurementWithoutChangingAudio() async throws {

@@ -26,6 +26,8 @@ final class LibraryModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var home = HomePreferences()
     @Published var recentSearches: [String] = []
+    @Published var yearScanProgress: String?
+    private var yearScanTask: Task<Void, Never>?
 
     init(paths: LibraryPaths, db: LibraryDatabase) {
         self.paths = paths; self.db = db
@@ -203,4 +205,29 @@ final class LibraryModel: ObservableObject {
             try? FileManager.default.removeItem(at: paths.documents.appendingPathComponent(relative))
         }
     }
+
+    func scanMissingYears() {
+        guard yearScanTask == nil else { return }
+        yearScanProgress = "Starting"
+        yearScanTask = Task {
+            defer { yearScanProgress = nil; yearScanTask = nil; revision += 1 }
+            do {
+                let ids = try await db.allIDs()
+                var failures = 0
+                for (index, id) in ids.enumerated() {
+                    try Task.checkCancellation()
+                    yearScanProgress = "\(index + 1) / \(ids.count)"
+                    guard let song = try await db.song(id), song.year == nil else { continue }
+                    do {
+                        if let year = try await MetadataExtractor.readYear(paths.audioURL(for: song)),
+                           let updated = try await db.fillMissingYear(id, year: year) { player.refreshSong(updated) }
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { failures += 1 }
+                }
+                if failures > 0 { errorMessage = "Could not read release years from \(failures) files." }
+            } catch is CancellationError { }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+    func cancelYearScan() { yearScanTask?.cancel() }
 }

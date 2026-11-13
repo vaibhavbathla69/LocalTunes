@@ -60,6 +60,8 @@ final class DiscoveryTests: XCTestCase {
         let updated = try await db.editSong("one", edits: edits)
         XCTAssertTrue(updated.isFavourite); XCTAssertEqual(updated.lastPlayedAt, first.lastPlayedAt)
         XCTAssertEqual(updated.fingerprint, first.fingerprint); XCTAssertEqual(updated.relativePath, first.relativePath)
+        let unchanged = try await db.fillMissingYear("one", year: 2020)
+        XCTAssertNil(unchanged, "Reading years must never overwrite an existing edit.")
         let order = try await db.allIDs(group: .album, value: "Album")
         XCTAssertEqual(order, ["two", "one"])
         let search = try await db.allIDs(searchFilters: SearchFilters(year: 1999))

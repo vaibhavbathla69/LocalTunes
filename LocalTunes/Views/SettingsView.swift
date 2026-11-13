@@ -32,10 +32,13 @@ struct SettingsView: View {
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
             Section {
-                NavigationLink("Playback", systemImage: "slider.horizontal.3") { PlaybackOptionsView() }
-                NavigationLink("Listening stats", systemImage: "chart.bar") { ListeningStatsView() }
+                NavigationLink { PlaybackOptionsView() } label: { Label("Playback", systemImage: "slider.horizontal.3") }
+                NavigationLink { ListeningStatsView() } label: { Label("Listening stats", systemImage: "chart.bar") }
             }
             Section("Library care") {
+                if let progress = library.yearScanProgress {
+                    HStack { ProgressView(); Text(progress); Spacer(); Button("Cancel") { library.cancelYearScan() } }
+                } else { Button("Read missing release years", systemImage: "calendar") { library.scanMissingYears() } }
                 Button(auditing ? "Checking files…" : "Check for missing audio files", systemImage: "checkmark.shield") {
                     auditing = true
                     Task {
