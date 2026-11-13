@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 import OSLog
 
-enum AppTab: Hashable { case home, search, library, playlists }
+enum AppTab: Hashable { case home, browse, search, library, playlists }
 
 @MainActor
 final class LibraryModel: ObservableObject {

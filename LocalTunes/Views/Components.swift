@@ -3,10 +3,10 @@ import UIKit
 import Combine
 
 enum Palette {
-    static let background = Color(red: 0.045, green: 0.05, blue: 0.06)
-    static let surface = Color(red: 0.1, green: 0.11, blue: 0.13)
-    static let accent = Color(red: 0.70, green: 0.98, blue: 0.36)
-    static let muted = Color.white.opacity(0.62)
+    static let background = Color(uiColor: .systemBackground)
+    static let surface = Color(uiColor: .secondarySystemBackground)
+    static let accent = Color(red: 250.0 / 255, green: 36.0 / 255, blue: 60.0 / 255)
+    static let muted = Color.secondary
 }
 
 actor ArtworkLoader {
@@ -75,7 +75,7 @@ struct SongRow: View {
                     Text(positionLabel).font(.subheadline.monospacedDigit()).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.65).frame(width: 34)
                 } else { ArtworkView(song: song) }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(song.title).font(.body.weight(.medium)).foregroundStyle(player.currentSong?.id == song.id ? Palette.accent : .white).lineLimit(1)
+                    Text(song.title).font(.body.weight(.medium)).foregroundStyle(player.currentSong?.id == song.id ? Palette.accent : .primary).lineLimit(1)
                     Text(song.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)

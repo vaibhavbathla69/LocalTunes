@@ -2,6 +2,10 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.5: editorial design
+
+System light/dark appearance, white/OLED-black surfaces, crimson controls, native material navigation and player dock, and five tabs including a local Browse page. Browse features large album cards and the library grid. Listen Now retains the user's history, popularity, stats and recent-import sections. Now Playing adds slowly moving cover-derived color fields, a system volume slider and a stronger play/pause artwork transition. Lyrics expand full-screen with an emphasized active line. Reduce Motion pauses background movement; materials respect system transparency preferences. Lossless badges identify supported lossless source-file extensions, not output quality or Dolby Atmos support.
+
 ### Version 1.4.2: word search
 
 Search requires every word you type, in any order and with gaps between them: `drugs should it` finds `Drugs You Should Try It`. Partial words and case-insensitive matching are retained. Song words can match title, artist, album, genre or year; album/artist/genre browsing matches words within the collection name. Extra whitespace is ignored, and `%`, `_` and backslash remain literal characters. Filters, pagination and Play/Shuffle use the same matching rules. Existing libraries need no reimport.

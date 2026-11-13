@@ -52,7 +52,7 @@ struct SongListView: View {
                     Label("Songs", systemImage: "music.note.list").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
                     Spacer()
                     Button { Task { await library.play(search: search, favourite: favourite, group: group, value: groupValue, sort: sort, shuffled: true, searchFilters: searchFilters, smart: smart) } } label: { Image(systemName: "shuffle").font(.title3).frame(width: 44, height: 44) }.buttonStyle(.plain).accessibilityLabel("Shuffle these songs")
-                    Button { play(nil) } label: { Image(systemName: "play.fill").foregroundStyle(Palette.background).frame(width: 46, height: 46).background(Palette.accent, in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Play these songs")
+                    Button { play(nil) } label: { Image(systemName: "play.fill").foregroundStyle(.white).frame(width: 46, height: 46).background(Palette.accent, in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Play these songs")
                 }.listRowSeparator(.hidden).listRowBackground(Color.clear)
             }
             ForEach(songs) { song in SongRow(song: song) { play(song.id) }.listRowSeparator(.hidden).listRowBackground(Color.clear) }
@@ -212,8 +212,8 @@ private struct SearchLandingView: View {
     private func browseLabel(_ title: String, symbol: String, seed: String) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(title).font(.title3.bold())
-            HStack { Spacer(); Image(systemName: symbol).font(.system(size: 38, weight: .medium)).rotationEffect(.degrees(15)).foregroundStyle(.white.opacity(0.75)) }
-        }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background { AlbumGradient(colors: .fallback(seed: seed), strength: 1) }.clipShape(RoundedRectangle(cornerRadius: 16))
+            HStack { Spacer(); Image(systemName: symbol).font(.system(size: 38, weight: .medium)).foregroundStyle(Palette.muted) }
+        }.foregroundStyle(.primary).padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surface).clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }

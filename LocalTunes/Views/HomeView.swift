@@ -13,7 +13,7 @@ struct HomeView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))
                     Text("Search").font(.body.weight(.semibold)); Spacer()
-                }.foregroundStyle(Palette.background).padding(17).background(.white, in: RoundedRectangle(cornerRadius: 14))
+                }.foregroundStyle(Palette.muted).padding(17).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
             }.buttonStyle(.plain).accessibilityLabel("Search your music").accessibilityIdentifier("home.search")
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
             ForEach(library.home.order.filter { $0.supported && !library.home.hidden.contains($0) }) { section in
@@ -26,9 +26,9 @@ struct HomeView: View {
                 }.listRowBackground(Color.clear)
             }
         }.listStyle(.insetGrouped).scrollContentBackground(.hidden)
-            .background { ArtworkBackdrop(song: feed.recentAlbums.first?.representative ?? feed.added.first, strength: 0.32).ignoresSafeArea() }
-            .navigationTitle("Home").navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(Palette.background.opacity(0.96), for: .navigationBar)
+            .background(Palette.background)
+            .navigationTitle("Listen Now").navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.regularMaterial, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -76,7 +76,7 @@ struct HomeView: View {
                     HStack(spacing: 20) {
                         metric("Listening time", value: feed.report.seconds.clock)
                         metric("Plays", value: String(feed.report.plays))
-                    }.padding(16).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                    }.padding(16).background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
                 }.accessibilityIdentifier("home.stats")
             } header: { heading(section.title) }.listRowBackground(Color.clear).listRowSeparator(.hidden)
         case .recentlyAdded:
@@ -94,7 +94,7 @@ struct HomeView: View {
         }
     }
     private func heading(_ title: String) -> some View {
-        Text(title).font(.title2.bold()).foregroundStyle(.white).textCase(nil).padding(.top, 16).padding(.bottom, 6)
+        Text(title).font(.title2.bold()).foregroundStyle(.primary).textCase(nil).padding(.top, 16).padding(.bottom, 6)
     }
     private func metric(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -112,7 +112,7 @@ struct HomeView: View {
 private struct HomeAlbumShelf: View {
     let albums: [AlbumActivity]
     let popular: Bool
-    @ScaledMetric(relativeTo: .body) private var coverSize: CGFloat = 148
+    @ScaledMetric(relativeTo: .body) private var coverSize: CGFloat = 176
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 16) {

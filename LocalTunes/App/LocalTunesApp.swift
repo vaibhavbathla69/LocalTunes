@@ -2,8 +2,15 @@ import SwiftUI
 
 @main
 struct LocalTunesApp: App {
+    private var testAppearance: ColorScheme? {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-dark") { return .dark }
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-light") { return .light }
+        #endif
+        return nil
+    }
     var body: some Scene {
-        WindowGroup { BootstrapView().preferredColorScheme(.dark).tint(Palette.accent) }
+        WindowGroup { BootstrapView().tint(Palette.accent).preferredColorScheme(testAppearance) }
     }
 }
 

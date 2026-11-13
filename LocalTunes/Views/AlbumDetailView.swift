@@ -29,7 +29,7 @@ struct AlbumDetailView: View {
                         Image(systemName: "shuffle").font(.title3).frame(width: 44, height: 46)
                     }.buttonStyle(.plain).accessibilityLabel("Shuffle album").accessibilityIdentifier("\(accessibilityPrefix).shuffle")
                     Button { Task { await library.playAlbum(albumName) } } label: {
-                        Image(systemName: "play.fill").foregroundStyle(Palette.background).frame(width: 48, height: 48).background(Palette.accent, in: Circle())
+                        Image(systemName: "play.fill").foregroundStyle(.white).frame(width: 48, height: 48).background(Palette.accent, in: Circle())
                     }.buttonStyle(.plain).accessibilityLabel("Play album in order").accessibilityIdentifier("\(accessibilityPrefix).play")
                 }.listRowSeparator(.hidden).listRowBackground(Color.clear)
             }

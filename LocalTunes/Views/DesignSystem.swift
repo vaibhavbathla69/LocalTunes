@@ -46,7 +46,7 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass").font(.title3.weight(.semibold)).foregroundStyle(Palette.muted)
-            TextField(prompt, text: $text, prompt: Text(prompt).foregroundColor(Palette.muted)).font(.body.weight(.medium)).foregroundStyle(.white)
+            TextField(prompt, text: $text, prompt: Text(prompt).foregroundColor(Palette.muted)).font(.body.weight(.medium)).foregroundStyle(.primary)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search)
                 .focused($focused).onSubmit { focused = false; onSearch() }
                 .accessibilityLabel(prompt).accessibilityIdentifier("localSearchField")
@@ -57,8 +57,8 @@ struct SearchField: View {
                 Button("Done") { focused = false; onSearch() }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("search.dismissKeyboard")
             }
         }.padding(.horizontal, 16).padding(.vertical, 9).frame(minHeight: 54)
-            .background(.white.opacity(0.085), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(focused ? 0.3 : 0.05), lineWidth: 1))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.accent.opacity(focused ? 0.5 : 0), lineWidth: 1))
             .task(id: focusRequest) { if focusRequest > 0 { focused = true } }
     }
 }
@@ -74,8 +74,8 @@ struct FilterPill: View {
                 if let icon { Image(systemName: icon) }
                 Text(title)
             }.font(.subheadline.weight(.semibold)).padding(.horizontal, 18).padding(.vertical, 11)
-                .foregroundStyle(selected ? Palette.background : .white)
-                .background(selected ? Palette.accent : .white.opacity(0.08), in: Capsule())
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .background(selected ? Palette.accent : Palette.surface, in: Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -85,7 +85,7 @@ struct RoundIconButton: View {
     var label: String
     var action: () -> Void
     var body: some View {
-        Button(action: action) { Image(systemName: symbol).font(.body.weight(.semibold)).frame(width: 44, height: 44).background(.white.opacity(0.09), in: Circle()) }
+        Button(action: action) { Image(systemName: symbol).font(.body.weight(.semibold)).frame(width: 44, height: 44).background(Palette.surface, in: Circle()) }
             .buttonStyle(.plain).accessibilityLabel(label)
     }
 }

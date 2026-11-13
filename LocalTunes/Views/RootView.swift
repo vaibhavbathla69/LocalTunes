@@ -10,14 +10,16 @@ struct RootView: View {
         TabView(selection: $library.selectedTab) {
             NavigationStack { HomeView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
                 .tabItem { Label("Home", systemImage: "house.fill") }.tag(AppTab.home)
-            NavigationStack { SearchView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(AppTab.search)
+            NavigationStack { BrowseView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Browse", systemImage: "square.grid.2x2.fill") }.tag(AppTab.browse)
             NavigationStack { LibraryView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
                 .tabItem { Label("Library", systemImage: "square.stack.fill") }.tag(AppTab.library)
             NavigationStack { PlaylistsView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
                 .tabItem { Label("Playlists", systemImage: "music.note.list") }.tag(AppTab.playlists)
+            NavigationStack { SearchView() }.safeAreaInset(edge: .bottom, spacing: 0) { PlayerDock(showNowPlaying: $nowPlaying) }
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(AppTab.search)
         }
-        .toolbarBackground(Palette.background.opacity(0.95), for: .tabBar)
+        .toolbarBackground(.regularMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
         .fullScreenCover(isPresented: $nowPlaying) { NowPlayingView() }
         .fileImporter(isPresented: $library.importFiles, allowedContentTypes: [.audio, UTType(filenameExtension: "lrc") ?? .plainText, .plainText], allowsMultipleSelection: true) { result in handleImport(result) }
@@ -63,25 +65,25 @@ private struct PlayerDock: View {
                         HStack(spacing: 12) {
                             ArtworkView(song: song, size: 44)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(song.title).font(.subheadline.bold()).lineLimit(1)
-                                Text(song.artist).font(.caption).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                                Text(song.title).font(.subheadline.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
+                                Text(song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityLabel("Open Now Playing: \(song.title)").accessibilityIdentifier("miniPlayer")
                     Button { Task { await player.toggle() } } label: { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.title3).frame(width: 44, height: 48) }.accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                     Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").frame(width: 40, height: 48) }.accessibilityLabel("Next song")
                 }.padding(.horizontal, 9).padding(.vertical, 9).padding(.bottom, 2)
-                    .background { ArtworkBackdrop(song: song, strength: 0.75) }
+                    .background(.regularMaterial)
                     .overlay(alignment: .bottom) {
                         GeometryReader { proxy in
-                            Capsule().fill(.white.opacity(0.18))
-                            Capsule().fill(.white).frame(width: proxy.size.width * min(1, max(0, player.duration > 0 ? player.position / player.duration : 0)))
+                            Capsule().fill(Color.primary.opacity(0.1))
+                            Capsule().fill(Palette.accent).frame(width: proxy.size.width * min(1, max(0, player.duration > 0 ? player.position / player.duration : 0)))
                         }.frame(height: 2).padding(.horizontal, 10).padding(.bottom, 4)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.09), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.07), lineWidth: 1))
             }
-        }.padding(.horizontal, 8).padding(.bottom, player.currentSong != nil || library.isImporting ? 7 : 0)
+        }.padding(.horizontal, 12).padding(.bottom, player.currentSong != nil || library.isImporting ? 7 : 0)
     }
 }
 

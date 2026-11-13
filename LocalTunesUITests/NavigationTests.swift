@@ -298,6 +298,29 @@ final class NavigationTests: XCTestCase {
     }
 
     @MainActor
+    func testEditorialDesignInLightAndDarkAppearance() throws {
+        for appearance in ["light", "dark"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio", "--ui-test-seed-history", "--ui-test-" + appearance]
+            app.launch()
+            XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+            XCTAssertEqual(app.tabBars.buttons.count, 5)
+            capture(app, name: "34-Home-" + appearance)
+            app.tabBars.buttons["Browse"].tap()
+            XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["In your collection"].waitForExistence(timeout: 5))
+            capture(app, name: "35-Browse-" + appearance)
+            app.tabBars.buttons["Library"].tap()
+            let song = app.buttons["song.CI reference tone"]
+            XCTAssertTrue(song.waitForExistence(timeout: 5))
+            song.tap()
+            XCTAssertTrue(app.buttons["miniPlayer"].waitForExistence(timeout: 10))
+            capture(app, name: "36-Library-" + appearance)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

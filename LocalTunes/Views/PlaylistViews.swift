@@ -50,7 +50,7 @@ struct PlaylistDetailView: View {
             if let playlist {
                 HStack {
                     Button { Task { await player.play(ids: playlist.songIDs) } } label: { Label("Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.background)
-                    Button { Task { await player.play(ids: playlist.songIDs.shuffled()) } } label: { Label("Shuffle", systemImage: "shuffle").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.bordered).tint(.white)
+                    Button { Task { await player.play(ids: playlist.songIDs.shuffled()) } } label: { Label("Shuffle", systemImage: "shuffle").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.bordered).tint(Palette.accent)
                 }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
             ForEach(songs) { song in

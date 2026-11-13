@@ -29,12 +29,14 @@ struct NowPlayingView: View {
                             }.buttonStyle(.plain).accessibilityLabel("Open album \(song.album)").accessibilityIdentifier("nowPlaying.album")
                             ArtworkView(song: song, size: max(130, min(350, min(proxy.size.width - 52, proxy.size.height * 0.39))), fullSize: true, cornerRadius: 12)
                                 .shadow(color: .black.opacity(0.35), radius: 28, y: 16)
-                                .scaleEffect(player.isPlaying ? 1 : 0.96)
+                                .scaleEffect(player.isPlaying ? 1 : 0.88)
                                 .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8), value: player.isPlaying)
                                 .padding(.vertical, 10)
                             trackDetails(song)
                             PlaybackTimeline()
                             transport
+                            SystemVolumeControl().frame(height: 34).accessibilityLabel("Volume")
+                            if let song = player.currentSong { AudioFormatBadge(song: song) }
                             HStack {
                                 Button { lyrics = true } label: { Label("Lyrics", systemImage: "quote.bubble.fill").font(.subheadline.bold()).padding(.horizontal, 17).frame(height: 44).background(.white.opacity(0.13), in: Capsule()) }
                                     .accessibilityLabel("Open lyrics").accessibilityIdentifier("nowPlaying.lyrics")
@@ -48,7 +50,7 @@ struct NowPlayingView: View {
                     } else { ContentUnavailableView("Nothing playing", systemImage: "music.note") }
                 }.frame(width: proxy.size.width, height: proxy.size.height)
             }
-            .background { ArtworkBackdrop(song: player.currentSong, strength: 0.95).ignoresSafeArea() }
+            .background { ImmersiveArtworkBackground(song: player.currentSong).ignoresSafeArea() }
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }.accessibilityLabel("Close Now Playing") }
@@ -73,7 +75,7 @@ struct NowPlayingView: View {
                         Button("Queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
             }
-            .sheet(isPresented: $lyrics) { LyricsView() }
+            .fullScreenCover(isPresented: $lyrics) { LyricsView() }
             .sheet(isPresented: $queue) { QueueView() }
             .sheet(isPresented: $timer) { SleepTimerView() }
             .sheet(isPresented: $editing) { if let song = player.currentSong { SongEditorView(song: song) } }
@@ -90,7 +92,7 @@ struct NowPlayingView: View {
                         .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Done") { album = nil }.accessibilityIdentifier("album.done") } }
                 }
             }
-        }.tint(.white).preferredColorScheme(.dark)
+        }.tint(Palette.accent).preferredColorScheme(.dark)
     }
 
     private func trackDetails(_ song: Song) -> some View {
@@ -110,7 +112,7 @@ struct NowPlayingView: View {
             Button { Task { await player.toggleShuffle() } } label: { Image(systemName: "shuffle").font(.title3).frame(maxWidth: .infinity, minHeight: 48).foregroundStyle(player.queue.shuffle ? Palette.accent : .white.opacity(0.65)) }.accessibilityLabel(player.queue.shuffle ? "Shuffle on" : "Shuffle off")
             Button { Task { await player.previous() } } label: { Image(systemName: "backward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Previous song")
             Button { Task { await player.toggle() } } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 29, weight: .semibold)).foregroundStyle(Palette.background).frame(width: 74, height: 74).background(.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 15, y: 6)
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 29, weight: .semibold)).foregroundStyle(.white).frame(width: 74, height: 74).background(Palette.accent, in: Circle()).shadow(color: .black.opacity(0.15), radius: 15, y: 6)
             }.accessibilityLabel(player.isPlaying ? "Pause" : "Play").accessibilityIdentifier("nowPlaying.playPause")
             Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Next song").accessibilityIdentifier("nowPlaying.next")
             Button { Task { await player.cycleRepeat() } } label: { Image(systemName: player.queue.repeatMode.symbol).font(.title3).frame(maxWidth: .infinity, minHeight: 48).foregroundStyle(player.queue.repeatMode != .off ? Palette.accent : .white.opacity(0.65)) }.accessibilityLabel("Repeat \(player.queue.repeatMode.rawValue)")
@@ -127,7 +129,7 @@ private struct PlaybackTimeline: View {
             Slider(value: Binding(get: { scrubbing ? value : min(player.position, max(player.duration, 1)) }, set: { value = $0 }), in: 0...max(player.duration, 1)) { editing in
                 scrubbing = editing
                 if !editing { player.seek(value) }
-            }.tint(.white).accessibilityLabel("Playback position").accessibilityValue(player.position.clock)
+            }.tint(Palette.accent).accessibilityLabel("Playback position").accessibilityValue(player.position.clock)
             HStack { Text((scrubbing ? value : player.position).clock); Spacer(); Text("−" + max(0, player.duration - (scrubbing ? value : player.position)).clock) }
                 .font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.6))
         }

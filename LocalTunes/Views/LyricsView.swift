@@ -17,7 +17,7 @@ struct LyricsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                ArtworkBackdrop(song: player.currentSong, strength: 0.9).ignoresSafeArea()
+                ImmersiveArtworkBackground(song: player.currentSong).ignoresSafeArea()
                 if let song = player.currentSong {
                     if raw.isEmpty {
                         ContentUnavailableView {
@@ -34,8 +34,11 @@ struct LyricsView: View {
                                     ForEach(parsed.lines) { line in
                                         Button { player.seek(line.time); following = true } label: {
                                             Text(line.text.isEmpty ? "•••" : line.text)
-                                                .font(.system(.title, design: .rounded, weight: .bold))
-                                                .foregroundStyle(active == line.id ? .white : .white.opacity(0.52))
+                                                .font(.system(.largeTitle, design: .default, weight: .bold))
+                                                .foregroundStyle(active == line.id ? .white : .white.opacity(0.34))
+                                                .blur(radius: active == line.id ? 0 : 1)
+                                                .shadow(color: active == line.id ? .white.opacity(0.2) : .clear, radius: 12)
+                                                .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: active)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
                                                 .contentShape(Rectangle())
                                         }.buttonStyle(.plain).id(line.id).accessibilityLabel("\(line.text), seek to \(line.time.clock)")
@@ -91,7 +94,7 @@ struct LyricsView: View {
                 }
             }
             .alert("Lyrics", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
-        }
+        }.preferredColorScheme(.dark)
     }
     private func loadLyrics() async {
         raw = ""; parsed = LyricsParser.parse(""); following = true
