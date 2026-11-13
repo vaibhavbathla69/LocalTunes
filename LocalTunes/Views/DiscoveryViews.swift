@@ -7,9 +7,11 @@ struct ArtistDetailView: View {
     @State private var albums: [GroupSummary] = []
     @State private var songs: [Song] = []
     @State private var representative: Song?
+    @State private var displayName = ""
+    @State private var merging = false
     var body: some View {
         List {
-            CollectionHeader(title: name, subtitle: "\(albums.count) albums", song: representative, symbol: "person.fill")
+            CollectionHeader(title: displayName.isEmpty ? name : displayName, subtitle: "\(albums.count) albums", song: representative, symbol: "person.fill")
                 .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
             Section("Albums") {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -26,10 +28,13 @@ struct ArtistDetailView: View {
                 NavigationLink("All songs") { SongListView(title: name, group: .artist, groupValue: name) }.listRowBackground(Color.clear)
             }
         }.listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background)
-            .navigationTitle(name).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(displayName.isEmpty ? name : displayName).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { merging = true } label: { Image(systemName: "person.2.fill").frame(width: 44, height: 44) }.accessibilityLabel("Merge duplicate artist").accessibilityIdentifier("artist.merge") } }
+            .sheet(isPresented: $merging) { ArtistMergeView(target: displayName.isEmpty ? name : displayName) }
             .accessibilityIdentifier("artist.screen")
             .task(id: library.revision) {
                 do {
+                    displayName = try await library.db.artistDisplayName(name)
                     albums = try await library.db.groups(.album, searchFilters: SearchFilters(artist: name))
                     songs = try await library.db.songs(sort: .mostPlayed, group: .artist, value: name, limit: 10)
                     representative = songs.first

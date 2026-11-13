@@ -72,6 +72,22 @@ final class FLACPlaybackTests: XCTestCase {
         player.pause()
     }
     @MainActor
+    func testAppendingToQueuePreservesCurrentPlaybackAndAddsAtTheEnd() async throws {
+        let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let player = PlaybackService(db: db, paths: paths)
+        await player.setCrossfade(0)
+        await player.play(ids: songs.map(\.id))
+        let started = await waitUntil { player.isPlaying }
+        XCTAssertTrue(started)
+        let current = player.queue.currentID
+        await player.append(songs[1].id, next: false)
+        XCTAssertEqual(player.queue.entries.map(\.songID), [songs[0].id, songs[1].id, songs[1].id])
+        XCTAssertEqual(player.queue.currentID, current)
+        XCTAssertEqual(player.currentSong?.id, songs[0].id)
+        XCTAssertTrue(player.isPlaying)
+        player.pause(); await player.flushListening()
+    }
+    @MainActor
     func testArtworkEditCreatesNewCoversAndLeavesFLACBytesUntouched() async throws {
         let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let song = songs[0]

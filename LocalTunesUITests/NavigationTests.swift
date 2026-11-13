@@ -135,13 +135,13 @@ final class NavigationTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["home.customize"].waitForExistence(timeout: 20))
         app.buttons["home.customize"].tap()
-        XCTAssertTrue(app.switches["home.section.featured"].waitForExistence(timeout: 5))
-        app.switches["home.section.featured"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
-        XCTAssertEqual(app.switches["home.section.featured"].value as? String, "0")
+        XCTAssertTrue(app.switches["home.section.mostPlayedSongs"].waitForExistence(timeout: 5))
+        app.switches["home.section.mostPlayedSongs"].coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        XCTAssertEqual(app.switches["home.section.mostPlayedSongs"].value as? String, "0")
         capture(app, name: "18-CustomizeHome")
         app.buttons["home.customize.save"].tap()
         app.buttons["home.customize"].tap()
-        XCTAssertEqual(app.switches["home.section.featured"].value as? String, "0")
+        XCTAssertEqual(app.switches["home.section.mostPlayedSongs"].value as? String, "0")
         app.buttons["home.customize.save"].tap()
         app.buttons["Open settings"].tap()
         XCTAssertTrue(app.buttons["settings.playback"].waitForExistence(timeout: 5))
@@ -207,6 +207,92 @@ final class NavigationTests: XCTestCase {
         app.buttons["song.edit.save"].tap()
         XCTAssertTrue(app.staticTexts["nowPlaying.title"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["nowPlaying.title"].label, "CI reference tone")
+    }
+
+    @MainActor
+    func testHomeUsesAlbumHistoryThenSongsStatsAndRecentImports() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio", "--ui-test-seed-history"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.recent.album.After Hours"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Recently played albums"].exists)
+        XCTAssertFalse(app.buttons["Liked songs"].exists)
+        capture(app, name: "27-HomeAlbumHistory")
+        scrollTo(app.staticTexts["Most played songs"], app: app)
+        XCTAssertTrue(app.buttons["home.popular.CI second tone"].exists)
+        scrollTo(app.buttons["home.stats"], app: app)
+        capture(app, name: "28-HomeSongsAndStats")
+        app.buttons["home.stats"].tap()
+        XCTAssertTrue(app.staticTexts["Listening time"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Home"].tap()
+        scrollTo(app.staticTexts["Recently added"], app: app)
+        XCTAssertTrue(app.tabBars.buttons["Playlists"].exists)
+    }
+
+    @MainActor
+    func testRightSwipeAddsToQueueWithoutReplacingOrPausingCurrentTrack() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["song.CI reference tone"].tap()
+        XCTAssertTrue(app.buttons["miniPlayer"].waitForExistence(timeout: 5))
+        let row = app.buttons["song.CI second tone"]
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)))
+        capture(app, name: "29-RightSwipeQueue")
+        app.buttons["miniPlayer"].tap()
+        XCTAssertTrue(app.staticTexts["nowPlaying.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["nowPlaying.title"].label, "CI reference tone")
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Pause'"), object: app.buttons["nowPlaying.playPause"])
+        XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 5), .completed)
+        app.buttons["nowPlaying.queue"].tap()
+        XCTAssertTrue(app.staticTexts["3 tracks"].waitForExistence(timeout: 5))
+        capture(app, name: "30-QueueAfterRightSwipe")
+    }
+
+    @MainActor
+    func testFeaturedArtistsShareSongsAndDuplicateNamesCanMerge() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio", "--ui-test-seed-artists"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["Artists"].tap()
+        let travis = app.buttons["collection.artist.Travis Scott"]
+        scrollTo(travis, app: app)
+        travis.tap()
+        XCTAssertTrue(app.buttons["song.CI Travis collab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["song.CI Travis solo"].exists)
+        capture(app, name: "31-PrimaryArtistWithFeatures")
+        app.navigationBars.buttons["Library"].tap()
+        let guest = app.buttons["collection.artist.The Weeknd"]
+        scrollTo(guest, app: app)
+        guest.tap()
+        XCTAssertTrue(app.buttons["song.CI Travis collab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["song.CI Weeknd solo"].exists)
+        capture(app, name: "32-FeaturedArtist")
+        app.navigationBars.buttons["Library"].tap()
+        let frank = app.buttons["collection.artist.Frank Ocean"]
+        for _ in 0..<5 { if frank.isHittable { break }; app.swipeDown() }
+        XCTAssertTrue(frank.isHittable)
+        frank.tap()
+        app.buttons["artist.merge"].tap()
+        let alias = app.buttons["artist.merge.FrankOcean"]
+        XCTAssertTrue(alias.waitForExistence(timeout: 5))
+        alias.tap()
+        app.buttons["Merge artist"].tap()
+        XCTAssertTrue(app.buttons["song.CI Frank alias"].waitForExistence(timeout: 5))
+        capture(app, name: "33-MergedArtist")
+        app.navigationBars.buttons["Library"].tap()
+        let removed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["collection.artist.FrankOcean"])
+        XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func scrollTo(_ element: XCUIElement, app: XCUIApplication) {
+        for _ in 0..<7 { if element.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(element.isHittable)
     }
 
     @MainActor

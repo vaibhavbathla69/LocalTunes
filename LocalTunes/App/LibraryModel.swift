@@ -178,6 +178,7 @@ final class LibraryModel: ObservableObject {
         var preferences = home
         if preferences.pins.contains(pin) { preferences.pins.removeAll { $0 == pin } }
         else { preferences.pins.append(pin); preferences.hidden.remove(.pinned) }
+        if !preferences.pins.isEmpty && !preferences.order.contains(.pinned) { preferences.order.append(.pinned) }
         await saveHome(preferences)
     }
 

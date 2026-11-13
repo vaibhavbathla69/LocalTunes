@@ -29,15 +29,24 @@ enum SmartCollection: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum HomeSection: String, CaseIterable, Codable, Identifiable {
-    case shortcuts, pinned, featured, recentlyPlayed, recentlyAdded, songs
+    case recentlyPlayedAlbums, mostPlayedAlbums, mostPlayedSongs, stats, recentlyAdded, pinned
+    // Decode old saved layouts without showing the retired shortcuts or spotlight.
+    case shortcuts, featured, recentlyPlayed, songs
+    static let defaultOrder: [HomeSection] = [.recentlyPlayedAlbums, .mostPlayedAlbums, .mostPlayedSongs, .stats, .recentlyAdded]
+    static var allCases: [HomeSection] { defaultOrder + [.pinned] }
+    var supported: Bool { Self.allCases.contains(self) }
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .shortcuts: return "Shortcuts"
+        case .recentlyPlayedAlbums: return "Recently played albums"
+        case .mostPlayedAlbums: return "Most played albums"
+        case .mostPlayedSongs: return "Most played songs"
+        case .stats: return "Stats"
+        case .recentlyAdded: return "Recently added"
         case .pinned: return "Pinned"
+        case .shortcuts: return "Shortcuts"
         case .featured: return "Featured song"
         case .recentlyPlayed: return "Recently played"
-        case .recentlyAdded: return "Recently added"
         case .songs: return "Songs"
         }
     }
@@ -51,9 +60,41 @@ struct HomePin: Identifiable, Codable, Equatable {
 }
 
 struct HomePreferences: Codable, Equatable {
-    var order = HomeSection.allCases
+    var order = HomeSection.defaultOrder
     var hidden: Set<HomeSection> = []
     var pins: [HomePin] = []
+    var layoutVersion = 2
+    init() {}
+    private enum CodingKeys: String, CodingKey { case order, hidden, pins, layoutVersion }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        pins = try values.decodeIfPresent([HomePin].self, forKey: .pins) ?? []
+        let version = try values.decodeIfPresent(Int.self, forKey: .layoutVersion) ?? 1
+        if version >= 2 {
+            let saved = try values.decodeIfPresent([HomeSection].self, forKey: .order) ?? HomeSection.defaultOrder
+            var seen: Set<HomeSection> = []
+            order = saved.filter { $0.supported && seen.insert($0).inserted }
+            order += HomeSection.defaultOrder.filter { !seen.contains($0) }
+            hidden = try values.decodeIfPresent(Set<HomeSection>.self, forKey: .hidden) ?? []
+            hidden = hidden.filter { $0.supported }
+        }
+    }
+}
+
+struct AlbumActivity: Identifiable, Sendable {
+    var name: String
+    var count: Int
+    var plays: Int
+    var representative: Song?
+    var id: String { name }
+}
+
+struct HomeFeed: Sendable {
+    var recentAlbums: [AlbumActivity] = []
+    var popularAlbums: [AlbumActivity] = []
+    var popularSongs: [Song] = []
+    var added: [Song] = []
+    var report = ListeningReport()
 }
 
 struct ListeningLeader: Identifiable, Sendable {

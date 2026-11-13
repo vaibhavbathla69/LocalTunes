@@ -67,6 +67,7 @@ struct SongRow: View {
     @State private var deleting = false
     @State private var choosingPlaylist = false
     @State private var editing = false
+    @State private var queued = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -79,14 +80,16 @@ struct SongRow: View {
                 }
                 Spacer(minLength: 8)
                 if song.isFavourite { Image(systemName: "heart.fill").font(.caption).foregroundStyle(Palette.accent) }
-                Text(song.duration.clock).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                if queued { Text("Queued").font(.caption.bold()).foregroundStyle(Palette.accent) }
+                else { Text(song.duration.clock).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
             }.padding(.vertical, 5).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(song.title), \(song.artist), \(song.duration.clock)")
         .accessibilityIdentifier(accessibilityID ?? "song.\(song.title)")
+        .accessibilityValue(queued ? "Added to queue" : "")
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button { Task { await library.favourite(song) } } label: { Label(song.isFavourite ? "Unlike" : "Like", systemImage: song.isFavourite ? "heart.slash" : "heart.fill") }.tint(.pink)
+            Button(action: enqueue) { Label("Add to queue", systemImage: "text.badge.plus") }.tint(.teal)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button { choosingPlaylist = true } label: { Label("Playlist", systemImage: "music.note.list") }.tint(.indigo)
@@ -107,6 +110,18 @@ struct SongRow: View {
         }
         .sheet(isPresented: $choosingPlaylist) { PlaylistPicker(songID: song.id) }
         .sheet(isPresented: $editing) { SongEditorView(song: song) }
+    }
+    private func enqueue() {
+        Task { @MainActor in
+            let count = player.queue.entries.count
+            await player.append(song.id, next: false)
+            guard player.queue.entries.count > count else { return }
+            queued = true
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            UIAccessibility.post(notification: .announcement, argument: "Added to queue")
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            queued = false
+        }
     }
 }
 

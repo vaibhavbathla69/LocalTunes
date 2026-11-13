@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var backupReady = false
     @State private var auditMessage: String?
     @State private var auditing = false
+    @State private var resettingArtists = false
     var body: some View {
         Form {
             Section {
@@ -36,6 +37,7 @@ struct SettingsView: View {
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
             Section("Library care") {
+                Button("Reset artist merges", systemImage: "arrow.uturn.backward") { resettingArtists = true }
                 if let progress = library.yearScanProgress {
                     HStack { ProgressView(); Text(progress); Spacer(); Button("Cancel") { library.cancelYearScan() } }
                 } else { Button("Read missing release years", systemImage: "calendar") { library.scanMissingYears() } }
@@ -71,6 +73,12 @@ struct SettingsView: View {
                 Text("Free Apple Account signing normally expires after 7 days. Refresh with the same Apple Account and app identifier. Install updates over the existing app; deleting the app removes its library.").font(.footnote).foregroundStyle(.secondary)
             }
         }.navigationTitle("Settings")
+            .confirmationDialog("Reset manual artist merges?", isPresented: $resettingArtists, titleVisibility: .visible) {
+                Button("Reset merges") { Task {
+                    do { try await library.db.resetArtistMerges(); library.revision += 1 }
+                    catch { library.errorMessage = error.localizedDescription }
+                } }
+            } message: { Text("Restores artist groupings from the original credits. Songs and listening history stay unchanged.") }
             .task { await library.refresh() }
             .alert("Index backup ready", isPresented: $backupReady) { Button("OK") { } } message: { Text("Copy LibraryIndex-backup.sqlite, Music, Artwork and Lyrics using Files or Apple Devices. Keep your original music files too.") }
             .alert("Library check", isPresented: Binding(get: { auditMessage != nil }, set: { if !$0 { auditMessage = nil } })) { Button("OK") { auditMessage = nil } } message: { Text(auditMessage ?? "") }

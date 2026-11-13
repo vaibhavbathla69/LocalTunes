@@ -78,7 +78,7 @@ final class DiscoveryTests: XCTestCase {
         let (root, db) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let paths = try LibraryPaths(documents: root.appendingPathComponent("Documents"))
         let model = LibraryModel(paths: paths, db: db)
-        var home = HomePreferences(); home.order.reverse(); home.hidden = [.featured]
+        var home = HomePreferences(); home.order.reverse(); home.hidden = [.mostPlayedSongs]
         await model.saveHome(home)
         await model.togglePin(HomePin(kind: .album, value: "Album"))
         await model.rememberSearch(" Test "); await model.rememberSearch("test")
@@ -86,7 +86,7 @@ final class DiscoveryTests: XCTestCase {
         for index in 0..<20 { await model.rememberSearch("Query \(index)") }
         XCTAssertEqual(model.recentSearches.count, 12)
         let reloaded = LibraryModel(paths: paths, db: db); await reloaded.load()
-        XCTAssertEqual(reloaded.home.hidden, [.featured]); XCTAssertEqual(reloaded.home.order, home.order)
+        XCTAssertEqual(reloaded.home.hidden, [.mostPlayedSongs]); XCTAssertEqual(reloaded.home.order, home.order + [.pinned])
         XCTAssertEqual(reloaded.home.pins, [HomePin(kind: .album, value: "Album")])
         XCTAssertEqual(reloaded.recentSearches, model.recentSearches)
         await reloaded.clearSearches()

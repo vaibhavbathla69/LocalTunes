@@ -2,6 +2,16 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.4 — album Home, swipe to queue, and artist credits
+
+Home now defaults to Recently played albums → Most played albums → Most played songs → Stats → Recently added. Album shelves open the full album page. Album popularity sums counted track plays; recency uses the last playback date of any track in the album. Stats and ranks refresh while Home is active. Liked-song/playlist shortcuts and the spotlight are removed. Older saved Home layouts migrate to this order; new section visibility/reordering remains customizable, and explicitly pinned items can still be added.
+
+Swipe a song right to append it to the end of the queue, with a short Queued confirmation and haptic feedback. This works in Home, Library, album/artist/playlist lists, and search/browse lists. Swiping left still offers Play Next, Queue and Playlist; liking remains in song options and the player's heart control.
+
+Artist pages use a derived many-to-many credit index rather than exact whole-tag grouping. `feat.`, `ft.`, `featuring`, parenthesized/bracketed title credits, semicolon/NUL/pipe lists and spaced slash lists are recognized. Featured lists also accept spaced ampersands. Main-artist punctuation is preserved (for example AC/DC, Tyler, the Creator, Earth, Wind & Fire). Repeated FLAC ARTIST fields are retained. Tracks appear under every recognized credit, and an artist's filters, queue, albums and stats use the same membership. Repeated credits never double-count one song on one page.
+
+Case, repeated/nonbreaking spaces, common invisible characters and Unicode width/composition differences collapse to one artist key. Song credits and audio are kept unchanged; the index backfills existing imports on update without reimporting. Actual misspellings are not guessed: on the preferred artist page, tap the two-person button and choose the duplicate name to merge. Merges persist for future imports and edits. Settings → Library care → Reset artist merges restores original name memberships while retaining automatic normalization. Global listening totals are not doubled when a track has several credited artists.
+
 ### Version 1.3 — library and playback tools
 
 - Artist pages: album shelves, top tracks from local play counts, and the complete artist song list. Open an artist in Library/Search or from Now Playing options.

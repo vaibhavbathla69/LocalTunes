@@ -16,6 +16,7 @@ struct NowPlayingView: View {
     @State private var playbackOptions = false
     @State private var artistName: String?
     @State private var options = false
+    @State private var artistCredits = false
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
@@ -61,7 +62,10 @@ struct NowPlayingView: View {
                         if let song = player.currentSong {
                             Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
                             Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
-                            Button("View artist", systemImage: "person.fill") { artistName = song.artist }
+                            Button("View artist", systemImage: "person.fill") {
+                                let names = ArtistCredits.names(artist: song.artist, title: song.title)
+                                if names.count == 1 { artistName = names.first } else { artistCredits = true }
+                            }
                             Button("Edit details", systemImage: "pencil") { editing = true }
                         }
                         Button(player.sleepTimer.isActive ? "Sleep timer (on)" : "Sleep timer", systemImage: "moon.zzz") { timer = true }
@@ -73,6 +77,7 @@ struct NowPlayingView: View {
             .sheet(isPresented: $queue) { QueueView() }
             .sheet(isPresented: $timer) { SleepTimerView() }
             .sheet(isPresented: $editing) { if let song = player.currentSong { SongEditorView(song: song) } }
+            .sheet(isPresented: $artistCredits) { if let song = player.currentSong { ArtistCreditsView(song: song) } }
             .sheet(isPresented: $playbackOptions) {
                 NavigationStack { PlaybackOptionsView().toolbar { Button("Done") { playbackOptions = false } } }
             }

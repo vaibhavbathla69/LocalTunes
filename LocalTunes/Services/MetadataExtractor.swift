@@ -44,7 +44,8 @@ enum MetadataExtractor {
         }
         let flac = try? FLACMetadata.read(url)
         if let flac {
-            title = flac["TITLE"] ?? title; artist = flac["ARTIST"] ?? artist
+            title = flac["TITLE"] ?? title
+            artist = flac.artists.isEmpty ? (flac["ARTIST"] ?? artist) : flac.artists.joined(separator: "; ")
             album = flac["ALBUM"] ?? album; genre = flac["GENRE"] ?? genre
             artwork = flac.picture ?? artwork; lyrics = flac["LYRICS"] ?? flac["UNSYNCEDLYRICS"] ?? lyrics
         }

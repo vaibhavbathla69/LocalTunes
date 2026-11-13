@@ -11,7 +11,10 @@ enum UITestSupport {
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: source) }
         let albumTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-album")
-        let inputs = [("CI reference tone", 60), ("CI second tone", 30)] + (albumTest ? [("CI Zulu opener", 45)] : [])
+        let artistTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-artists")
+        let historyTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-history")
+        let artistInputs = [("CI Frank one", 36), ("CI Frank two", 37), ("CI Frank alias", 41), ("CI Travis collab", 38), ("CI Weeknd solo", 39), ("CI Travis solo", 42)]
+        let inputs = [("CI reference tone", 60), ("CI second tone", 30)] + (albumTest ? [("CI Zulu opener", 45)] : []) + (artistTest ? artistInputs : [])
         for (name, seconds) in inputs {
             var data = Data()
             let size = seconds * 44100 * 2
@@ -35,8 +38,25 @@ enum UITestSupport {
             song.trackNumber = song.originalFilename.contains("Zulu") ? 1 : (warm ? 2 : 1)
             song.discNumber = 1
             song.year = 2024
+            if artistTest {
+                switch song.title {
+                case "CI Frank one": song.artist = "FRANK OCEAN"
+                case "CI Frank two": song.artist = "Frank\u{00A0}Ocean\u{200B}"
+                case "CI Frank alias": song.artist = "FrankOcean"
+                case "CI Travis collab": song.artist = "Travis Scott feat. The Weeknd"
+                case "CI Weeknd solo": song.artist = "The Weeknd"
+                case "CI Travis solo": song.artist = "Travis Scott"
+                default: break
+                }
+            }
+            if historyTest && ["CI reference tone", "CI second tone"].contains(song.title) {
+                song.lastPlayedAt = Date().addingTimeInterval(song.title == "CI reference tone" ? 0 : -3600)
+            }
             song.artworkPath = try MetadataExtractor.writeArtwork(cover(warm: warm), id: song.id, paths: paths)
             try await db.save(song)
+            if historyTest && ["CI reference tone", "CI second tone"].contains(song.title) {
+                try await db.recordListening(song.id, seconds: song.title == "CI reference tone" ? 180 : 240, plays: song.title == "CI reference tone" ? 3 : 8)
+            }
         }
     }
 

@@ -6,6 +6,7 @@ enum FLACMetadata {
         var values: [String: String] = [:]
         var picture: Data?
         var duration: Double?
+        var artists: [String] = []
         subscript(_ key: String) -> String? { values[key] }
         var year: Int? { values["DATE"].flatMap { Int($0.prefix(4)) } ?? values["YEAR"].flatMap(Int.init) }
     }
@@ -39,7 +40,11 @@ enum FLACMetadata {
             if type == 0 || type == 4 || type == 6 {
                 guard let block = try handle.read(upToCount: length), block.count == length else { break }
                 if type == 0 { tags.duration = streamDuration(block) }
-                else if type == 4 { tags.values.merge(comments(block)) { first, _ in first } }
+                else if type == 4 {
+                    let entries = commentValues(block)
+                    tags.values.merge(entries.compactMapValues { $0.first }) { first, _ in first }
+                    tags.artists += entries["ARTIST"] ?? []
+                }
                 else if tags.picture == nil { tags.picture = picture(block) }
             } else { try handle.seek(toOffset: handle.offsetInFile + UInt64(length)) }
             if header[0] & 0x80 != 0 { break }
@@ -47,6 +52,9 @@ enum FLACMetadata {
         return tags
     }
     static func comments(_ data: Data) -> [String: String] {
+        commentValues(data).compactMapValues { $0.first }
+    }
+    static func commentValues(_ data: Data) -> [String: [String]] {
         var offset = 0
         func integer() -> Int? {
             guard offset + 4 <= data.count else { return nil }
@@ -59,11 +67,11 @@ enum FLACMetadata {
             return String(data: data.subdata(in: offset..<offset + count), encoding: .utf8)
         }
         guard let vendorLength = integer(), string(vendorLength) != nil, let count = integer(), count <= 100_000 else { return [:] }
-        var result: [String: String] = [:]
+        var result: [String: [String]] = [:]
         for _ in 0..<count {
             guard let size = integer(), let value = string(size), let equals = value.firstIndex(of: "=") else { break }
             let key = String(value[..<equals]).uppercased()
-            if result[key] == nil { result[key] = String(value[value.index(after: equals)...]) }
+            result[key, default: []].append(String(value[value.index(after: equals)...]))
         }
         return result
     }

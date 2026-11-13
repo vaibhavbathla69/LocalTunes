@@ -1,150 +1,5 @@
 import SwiftUI
 
-struct HomeView: View {
-    @EnvironmentObject private var library: LibraryModel
-    @EnvironmentObject private var player: PlaybackService
-    @State private var recent: [Song] = []
-    @State private var added: [Song] = []
-    @State private var customizing = false
-    private var spotlight: Song? { player.currentSong ?? recent.first ?? added.first }
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Button { library.openSearch() } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))
-                        Text("Search").font(.body.weight(.semibold))
-                        Spacer(minLength: 0)
-                    }.foregroundStyle(Palette.background).padding(17).background(.white, in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(.plain).accessibilityLabel("Search your music").accessibilityIdentifier("home.search")
-                ForEach(library.home.order.filter { !library.home.hidden.contains($0) }) { section in
-                    homeSection(section)
-                }
-                if added.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionHeading(title: "Import music")
-                        HStack(spacing: 12) {
-                            importTile("Files", symbol: "music.note", seed: "violet") { library.importFiles = true }
-                            importTile("Folder", symbol: "folder.fill", seed: "teal") { library.importFolder = true }
-                        }
-                    }
-                }
-            }.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
-        }.background { ArtworkBackdrop(song: spotlight, strength: 0.32).ignoresSafeArea() }
-            .navigationTitle("Home").navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { customizing = true } label: { Image(systemName: "slider.horizontal.3").frame(width: 36, height: 36) }.accessibilityLabel("Customize Home").accessibilityIdentifier("home.customize")
-                    ImportMenu()
-                    NavigationLink { SettingsView() } label: { Image(systemName: "gearshape").frame(width: 36, height: 36) }.accessibilityLabel("Open settings")
-                }
-            }
-            .sheet(isPresented: $customizing) { HomeEditorView(preferences: library.home) }
-            .accessibilityIdentifier("home.screen")
-            .task(id: library.revision) {
-                do {
-                    recent = try await library.db.songs(sort: .played, limit: 12).filter { $0.lastPlayedAt != nil }
-                    added = try await library.db.songs(sort: .added, limit: 12)
-                } catch { library.errorMessage = error.localizedDescription }
-            }
-    }
-
-    @ViewBuilder private func homeSection(_ section: HomeSection) -> some View {
-        switch section {
-        case .shortcuts: quickLinks
-        case .pinned:
-            if !library.home.pins.isEmpty { PinnedHomeView() }
-        case .featured:
-            if let song = spotlight { SpotlightCard(song: song) { Task { await library.play(sort: .added, startingAt: song.id) } } }
-        case .recentlyPlayed:
-            if !recent.isEmpty { SongShelf(title: "Recently played", songs: recent, sort: .played) }
-        case .recentlyAdded:
-            if !added.isEmpty { SongShelf(title: "Recently added", songs: added, sort: .added) }
-        case .songs:
-            if !added.isEmpty {
-                VStack(spacing: 12) {
-                    HStack { SectionHeading(title: "Songs"); NavigationLink("See all") { SongListView(title: "All songs") }.font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted) }
-                    ForEach(added.prefix(4)) { song in SongRow(song: song) { Task { await library.play(sort: .added, startingAt: song.id) } } }
-                }
-            }
-        }
-    }
-
-    private var quickLinks: some View {
-        HStack(spacing: 10) {
-            NavigationLink { SongListView(title: "Liked songs", favourite: true) } label: {
-                quickLink("Liked songs", symbol: "heart.fill", colors: [.purple, .indigo])
-            }
-            Button { library.selectedTab = .playlists } label: { quickLink("Playlists", symbol: "music.note.list", colors: [.teal, .blue]) }
-        }.buttonStyle(.plain)
-    }
-    private func quickLink(_ title: String, symbol: String, colors: [Color]) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).font(.body.bold()).frame(width: 44, height: 52).background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-            Text(title).font(.caption.weight(.bold)).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(.trailing, 8).background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9)).clipShape(RoundedRectangle(cornerRadius: 9))
-    }
-    private func importTile(_ title: String, symbol: String, seed: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: symbol).font(.title2).padding(.bottom, 10)
-                Text(title).font(.headline)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
-                .background { AlbumGradient(colors: .fallback(seed: seed), strength: 0.9) }.clipShape(RoundedRectangle(cornerRadius: 18))
-        }.buttonStyle(.plain)
-    }
-}
-
-private struct SpotlightCard: View {
-    let song: Song
-    let action: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .center, spacing: 20) {
-                CollectionCover(song: song, symbol: "waveform", size: 126, seed: "LocalTunes spotlight").shadow(color: .black.opacity(0.3), radius: 15, y: 8)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(song.title).font(.title2.weight(.heavy)).lineLimit(3).minimumScaleFactor(0.8)
-                    Text(song.artist).font(.subheadline).foregroundStyle(.white.opacity(0.72)).lineLimit(3)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            HStack {
-                Text(song.album).font(.caption).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
-                Spacer(minLength: 8)
-                Button(action: action) { Image(systemName: "play.fill").font(.title3.bold()).foregroundStyle(Palette.background).frame(width: 52, height: 52).background(Palette.accent, in: Circle()) }
-                    .accessibilityLabel("Play \(song.title)")
-            }
-        }.padding(22).background { ArtworkBackdrop(song: song, strength: 0.9) }
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1))
-    }
-}
-
-private struct SongShelf: View {
-    @EnvironmentObject private var library: LibraryModel
-    let title: String
-    let songs: [Song]
-    let sort: LibrarySort
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeading(title: title)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 16) {
-                    ForEach(songs) { song in
-                        Button { Task { await library.play(sort: sort, startingAt: song.id) } } label: {
-                            VStack(alignment: .leading, spacing: 10) {
-                                ArtworkView(song: song, size: 156, fullSize: true).shadow(color: .black.opacity(0.25), radius: 10, y: 6)
-                                Text(song.title).font(.subheadline.bold()).lineLimit(1)
-                                Text(song.artist).font(.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                            }.frame(width: 156, alignment: .leading)
-                        }.buttonStyle(.plain)
-                    }
-                }.padding(.bottom, 8)
-            }
-        }
-    }
-}
-
 struct LibraryView: View {
     @EnvironmentObject private var library: LibraryModel
     @State private var selection = "Songs"
@@ -303,17 +158,17 @@ struct SearchView: View {
                     .accessibilityLabel("Search filters").accessibilityIdentifier("search.filters")
             }.padding(.horizontal, 20)
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && filters.isEmpty {
-                ScrollView {
+                List {
                     if !library.recentSearches.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack { Text("Recent searches").font(.headline); Spacer(); Button("Clear") { Task { await library.clearSearches() } } }
                             ForEach(library.recentSearches, id: \.self) { query in
                                 Button { text = query } label: { Label(query, systemImage: "clock").frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8) }.buttonStyle(.plain)
                             }
-                        }.padding(.horizontal, 20)
+                        }.padding(.vertical, 8).listRowBackground(Color.clear).listRowSeparator(.hidden)
                     }
                     SearchLandingView()
-                }
+                }.listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background)
             }
             else {
                 HStack(spacing: 8) {
@@ -334,18 +189,20 @@ private struct SearchLandingView: View {
     @EnvironmentObject private var library: LibraryModel
     @State private var recent: [Song] = []
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        Group {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     browseTile("Albums", symbol: "square.stack.fill", kind: .album, seed: "purple albums")
                     browseTile("Artists", symbol: "person.fill", kind: .artist, seed: "cyan artists")
                     browseTile("Genres", symbol: "guitars.fill", kind: .genre, seed: "red genres")
                     NavigationLink { SongListView(title: "Liked songs", favourite: true) } label: { browseLabel("Liked songs", symbol: "heart.fill", seed: "indigo favourites") }.buttonStyle(.plain)
-                }
+                }.padding(.vertical, 8).listRowBackground(Color.clear).listRowSeparator(.hidden)
                 if !recent.isEmpty {
-                    SectionHeading(title: "Recently added")
-                    ForEach(recent) { song in SongRow(song: song) { Task { await library.play(sort: .added, startingAt: song.id) } } }
+                    Section {
+                        ForEach(recent) { song in SongRow(song: song) { Task { await library.play(sort: .added, startingAt: song.id) } } }
+                    } header: { Text("Recently added").font(.headline).textCase(nil) }
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
-        }.padding(20).scrollDismissesKeyboard(.interactively).task(id: library.revision) {
+        }.scrollDismissesKeyboard(.interactively).task(id: library.revision) {
             do { recent = try await library.db.songs(sort: .added, limit: 5) } catch { library.errorMessage = error.localizedDescription }
         }
     }
