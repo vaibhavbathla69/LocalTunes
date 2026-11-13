@@ -76,7 +76,7 @@ final class PlaybackTests: XCTestCase {
     private func waitUntil(_ condition: () -> Bool) async -> Bool {
         for _ in 0..<100 {
             if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
         return condition()
     }

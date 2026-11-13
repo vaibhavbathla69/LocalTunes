@@ -15,6 +15,10 @@ struct SettingsView: View {
                     Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LocalTunes").font(.title.bold())
                 }.padding(.vertical, 12)
             }
+            Section {
+                NavigationLink { PlaybackOptionsView() } label: { Label("Playback", systemImage: "slider.horizontal.3") }.accessibilityIdentifier("settings.playback")
+                NavigationLink { ListeningStatsView() } label: { Label("Listening stats", systemImage: "chart.bar") }.accessibilityIdentifier("settings.stats")
+            }
             Section("On this iPhone") {
                 LabeledContent("Songs", value: "\(library.songCount)")
                 LabeledContent("Indexed audio", value: ByteCountFormatter.string(fromByteCount: library.musicBytes, countStyle: .file))
@@ -30,10 +34,6 @@ struct SettingsView: View {
             Section("Lyrics") {
                 Toggle("Follow synchronized lyrics", isOn: $lyricsAutoFollow)
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
-            }
-            Section {
-                NavigationLink { PlaybackOptionsView() } label: { Label("Playback", systemImage: "slider.horizontal.3") }
-                NavigationLink { ListeningStatsView() } label: { Label("Listening stats", systemImage: "chart.bar") }
             }
             Section("Library care") {
                 if let progress = library.yearScanProgress {

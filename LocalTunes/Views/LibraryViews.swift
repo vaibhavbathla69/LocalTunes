@@ -211,7 +211,7 @@ struct SongListView: View {
             .collectionNavigationTitle(title, embedded: embedded)
             .task(id: queryKey) {
                 queryGeneration += 1; songs = []; canLoadMore = true; loading = false
-                if !search.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+                if !search.isEmpty { try? await Task.sleep(nanoseconds: 250_000_000) }
                 guard !Task.isCancelled else { return }
                 await loadNext()
             }

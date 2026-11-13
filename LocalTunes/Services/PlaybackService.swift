@@ -279,10 +279,20 @@ final class PlaybackService: ObservableObject {
     }
 
     private func makeItem(_ song: Song, entry: QueueEntry) -> AVPlayerItem {
-        let item = AVPlayerItem(url: paths.audioURL(for: song))
-        item.preferredForwardBufferDuration = 5
+        let item = audioItem(song)
         itemEntries[ObjectIdentifier(item)] = entry
         itemSongs[ObjectIdentifier(item)] = song
+        return item
+    }
+
+    private func audioItem(_ song: Song) -> AVPlayerItem {
+        let url = paths.audioURL(for: song)
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 5
+        if url.pathExtension.lowercased() == "flac", let exact = try? FLACMetadata.duration(url) {
+            item.forwardPlaybackEndTime = CMTime(seconds: exact, preferredTimescale: 1_000_000)
+        }
         return item
     }
 
@@ -301,7 +311,7 @@ final class PlaybackService: ObservableObject {
             await loadGain(song)
             guard token == generation else { return }
             if crossfadeSeconds > 0, entry.id != queue.currentID, queue.repeatMode != .one {
-                let incoming = AVQueuePlayer(items: [AVPlayerItem(url: paths.audioURL(for: song))])
+                let incoming = AVQueuePlayer(items: [audioItem(song)])
                 incoming.automaticallyWaitsToMinimizeStalling = false; incoming.volume = 0
                 preparedFade = (incoming, entry, song)
                 incoming.preroll(atRate: 1) { _ in }
@@ -374,7 +384,11 @@ final class PlaybackService: ObservableObject {
         synchronizeCurrentItem()
         accountListening(seconds)
         position = max(0, seconds)
-        if let actual = player.currentItem?.duration.seconds, actual.isFinite, actual > 0 { duration = actual }
+        if let item = player.currentItem {
+            let end = item.forwardPlaybackEndTime.seconds
+            let actual = end.isFinite && end > 0 ? end : item.duration.seconds
+            if actual.isFinite, actual > 0 { duration = actual }
+        }
         if isPlaying && abs(position - lastSavedPosition) >= 10 { savePosition() }
         if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
         if isPlaying { startCrossfadeIfReady() }
@@ -590,7 +604,8 @@ final class PlaybackService: ObservableObject {
                     outgoing.pause(); outgoing.removeAllItems(); fadingPlayer = nil; isCrossfading = false; fadeTask = nil
                     await fillUpcoming(); return
                 }
-                do { try await Task.sleep(for: .milliseconds(40)) } catch { return }
+                // Avoid the cross-module Clock specialization crash: swiftlang/swift#86204.
+                do { try await Task.sleep(nanoseconds: 40_000_000) } catch { return }
             }
         }
     }
@@ -603,7 +618,7 @@ final class PlaybackService: ObservableObject {
         if sleepTimer.deadline != nil {
             sleepTask = Task { [weak self] in
                 while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                    do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
                     guard let self else { return }
                     if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
                 }

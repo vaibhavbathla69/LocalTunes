@@ -39,7 +39,7 @@ final class FLACPlaybackTests: XCTestCase {
         player.pause(); await player.flushListening()
         let report = try await db.listeningReport()
         XCTAssertEqual(report.plays, 2); XCTAssertGreaterThan(report.seconds, 5); XCTAssertLessThan(report.seconds, 8)
-        try await Task.sleep(for: .milliseconds(300)); await player.flushListening()
+        try await Task.sleep(nanoseconds: 300_000_000); await player.flushListening()
         let paused = try await db.listeningReport()
         XCTAssertEqual(paused.seconds, report.seconds, accuracy: 0.02)
     }
@@ -94,7 +94,7 @@ final class FLACPlaybackTests: XCTestCase {
         await player.setCrossfade(0)
         await player.cycleRepeat(); await player.cycleRepeat()
         await player.play(ids: [songs[0].id])
-        try await Task.sleep(for: .seconds(7))
+        try await Task.sleep(nanoseconds: 7_000_000_000)
         player.pause(); await player.flushListening()
         let report = try await db.listeningReport()
         XCTAssertEqual(report.plays, 2)
@@ -117,7 +117,7 @@ final class FLACPlaybackTests: XCTestCase {
     private func waitUntil(_ condition: () -> Bool) async -> Bool {
         for _ in 0..<200 {
             if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
         return condition()
     }

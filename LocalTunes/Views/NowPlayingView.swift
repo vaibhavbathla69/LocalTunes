@@ -15,6 +15,7 @@ struct NowPlayingView: View {
     @State private var editing = false
     @State private var playbackOptions = false
     @State private var artistName: String?
+    @State private var options = false
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
@@ -52,7 +53,11 @@ struct NowPlayingView: View {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }.accessibilityLabel("Close Now Playing") }
                 ToolbarItem(placement: .principal) { Text("NOW PLAYING").font(.caption.weight(.bold)).tracking(2) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
+                    Button { options = true } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                        .accessibilityLabel("Now Playing options").accessibilityIdentifier("nowPlaying.options")
+                }
+            }
+            .confirmationDialog("Now Playing", isPresented: $options, titleVisibility: .hidden) {
                         if let song = player.currentSong {
                             Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
                             Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
@@ -63,8 +68,6 @@ struct NowPlayingView: View {
                         Button("Playback settings", systemImage: "slider.horizontal.3") { playbackOptions = true }
                         Button("Queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
-                    } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Now Playing options")
-                }
             }
             .sheet(isPresented: $lyrics) { LyricsView() }
             .sheet(isPresented: $queue) { QueueView() }

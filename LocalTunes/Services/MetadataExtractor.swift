@@ -60,7 +60,7 @@ enum MetadataExtractor {
         let position = await position(in: items, filename: originalName)
         return ExtractedMetadata(title: Song.text(title, fallback: Song.fallbackTitle(filename: originalName)),
                                  artist: Song.text(artist, fallback: "Unknown artist"), album: Song.text(album, fallback: "Unknown album"),
-                                 genre: Song.text(genre, fallback: "Unknown genre"), track: AlbumPosition.number(flac?["TRACKNUMBER"]) ?? position.track ?? 0, disc: AlbumPosition.number(flac?["DISCNUMBER"]) ?? position.disc, duration: duration,
+                                 genre: Song.text(genre, fallback: "Unknown genre"), track: AlbumPosition.number(flac?["TRACKNUMBER"]) ?? position.track ?? 0, disc: AlbumPosition.number(flac?["DISCNUMBER"]) ?? position.disc, duration: flac?.duration ?? duration,
                                  artwork: artwork, lyrics: lyrics, year: year)
     }
 
