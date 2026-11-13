@@ -59,7 +59,7 @@ struct ArtworkColors: Equatable, Sendable {
         let alternate = ranked.dropFirst().first { bucket in
             let c = bucket.color
             return abs(c.red - dominant.red) + abs(c.green - dominant.green) + abs(c.blue - dominant.blue) > 0.65
-        }?.color ?? RGB(red: dominant.blue, green: dominant.red, blue: dominant.green)
+        }?.color ?? RGB(red: dominant.red * 0.6, green: dominant.green * 0.6, blue: dominant.blue * 0.6)
         func lift(_ color: RGB, brightness: Double) -> RGB {
             let scale = brightness / max(0.12, color.brightness)
             return RGB(red: min(1, color.red * scale), green: min(1, color.green * scale), blue: min(1, color.blue * scale))

@@ -29,12 +29,19 @@ struct ArtworkView: View {
     var fullSize = false
     var cornerRadius: CGFloat? = nil
     @State private var image: UIImage?
+    private var placeholderColors: ArtworkColors { .fallback(seed: "\(song?.album ?? "LocalTunes")|\(song?.artist ?? "")") }
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.18, green: 0.26, blue: 0.23), Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [placeholderColors.primary.color, placeholderColors.secondary.color, Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing)
             if let image { Image(uiImage: image).resizable().scaledToFill() }
-            else { Image(systemName: "waveform").font(.system(size: max(18, size * 0.25), weight: .light)).foregroundStyle(Palette.accent.opacity(0.7)) }
+            else {
+                if size > 100 {
+                    Circle().stroke(.white.opacity(0.08), lineWidth: 1).padding(size * 0.12)
+                    Circle().stroke(.white.opacity(0.07), lineWidth: size * 0.08).padding(size * 0.22)
+                }
+                Image(systemName: "waveform").font(.system(size: max(18, size * 0.25), weight: .light)).foregroundStyle(.white.opacity(0.8))
+            }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? (size > 100 ? 14 : 7)))

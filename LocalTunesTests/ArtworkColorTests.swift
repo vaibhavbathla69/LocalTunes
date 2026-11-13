@@ -16,6 +16,8 @@ final class ArtworkColorTests: XCTestCase {
         let cool = try XCTUnwrap(ArtworkColors.extract(from: image(red: 20, green: 65, blue: 230)))
         XCTAssertGreaterThan(warm.primary.red, warm.primary.blue + 0.4)
         XCTAssertGreaterThan(cool.primary.blue, cool.primary.red + 0.4)
+        XCTAssertGreaterThan(warm.secondary.red, warm.secondary.green)
+        XCTAssertGreaterThan(cool.secondary.blue, cool.secondary.red)
         XCTAssertNotEqual(warm, cool)
     }
     func testEmptyAndBlackImagesUseFallbackInsteadOfInvalidColors() throws {
