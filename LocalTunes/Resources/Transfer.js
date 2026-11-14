@@ -49,13 +49,17 @@ if (typeof document !== 'undefined') {
     try {
       let count = 0;
       for (const file of files) {
+        if (controller.signal.aborted) throw new DOMException('Paused', 'AbortError');
+        progress.value = 0;
         status.textContent = 'Preparing ' + file.name;
         let upload = await request('begin', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:file.name,size:file.size,modified:String(file.lastModified),relative:file.webkitRelativePath || file.name})});
         const chunk = 1048576;
         for (let i = 0; i < upload.hashes.length; i++) {
+          if (controller.signal.aborted) throw new DOMException('Paused', 'AbortError');
           status.textContent = 'Verifying resume: ' + file.name;
           const data = await file.slice(i*chunk, Math.min((i+1)*chunk,file.size)).arrayBuffer();
           if (sha256(data) !== upload.hashes[i]) throw new Error('This file changed since the earlier upload. Rename it and select it again.');
+          progress.value = Math.min((i+1)*chunk,file.size) / file.size;
         }
         let offset = upload.offset;
         while (!upload.completed && offset < file.size) {
@@ -64,7 +68,10 @@ if (typeof document !== 'undefined') {
           offset = upload.offset; progress.value = offset / file.size;
           status.textContent = file.name + ' — ' + Math.round(100*progress.value) + '% ('+(count+1)+'/'+files.length+')';
         }
-        if (!upload.completed) await request('finish?id='+encodeURIComponent(upload.id), {method:'POST'});
+        if (!upload.completed) {
+          status.textContent = 'Verifying received file: ' + file.name;
+          await request('finish?id='+encodeURIComponent(upload.id), {method:'POST'});
+        }
         count++; progress.value = 1;
       }
       status.textContent = count + ' files received (' + skipped + ' unsupported or empty files skipped). Stop transfer on the iPhone, then tap Import received files.';

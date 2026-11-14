@@ -185,7 +185,7 @@ struct ListeningStatsView: View {
                     do { try await player.clearListeningHistory(); await reload(); library.revision += 1 }
                     catch { library.errorMessage = error.localizedDescription }
                 } }
-            }
+            } message: { Text("Listening totals and listening sessions will be removed. Playlists and bookmarks are kept.") }
     }
     private var streak: Int {
         let calendar = Calendar.current

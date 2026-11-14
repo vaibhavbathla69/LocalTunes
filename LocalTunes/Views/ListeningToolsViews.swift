@@ -116,6 +116,12 @@ struct BookmarksView: View {
         List {
             if let song = player.currentSong {
                 Section(song.title) {
+                    HStack {
+                        Button(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill") { Task { await player.toggle() } }
+                        Spacer()
+                        Text(player.position.clock).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    BookmarkScrubber()
                     Button("Bookmark current position", systemImage: "bookmark") { capturedSong = song; position = player.position; name = player.position.clock; adding = true }
                     Button(player.repeatA.map { "A: " + $0.clock } ?? "Set loop start A") { player.markRepeatA() }
                     Button(player.repeatB.map { "B: " + $0.clock } ?? "Set loop end B") { player.markRepeatB() }.disabled(player.repeatA == nil || player.position < (player.repeatA ?? 0) + 0.25)
@@ -140,4 +146,16 @@ struct BookmarksView: View {
             }
     }
     private func save() async { busy = true; defer { busy = false }; do { try await library.db.setState("playback.bookmarks", value: bookmarks) } catch { library.errorMessage = error.localizedDescription } }
+}
+
+private struct BookmarkScrubber: View {
+    @EnvironmentObject private var player: PlaybackService
+    @State private var scrubbing = false
+    @State private var value = 0.0
+    var body: some View {
+        Slider(value: Binding(get: { scrubbing ? value : min(player.position, max(1, player.duration)) }, set: { value = $0 }), in: 0...max(1, player.duration)) { editing in
+            scrubbing = editing
+            if !editing { player.seek(value) }
+        }.accessibilityLabel("Bookmark and repeat position")
+    }
 }

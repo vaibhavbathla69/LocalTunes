@@ -30,6 +30,8 @@ jobs:
           xcodebuild -version
           xcodegen generate
           xcodebuild -resolvePackageDependencies -project LocalTunes.xcodeproj -scheme LocalTunes
+      - name: Test browser transfer checksums
+        run: node scripts/test_transfer_client.cjs
       - name: Compile for physical iPhone without signing
         run: |
           set -euo pipefail
