@@ -141,7 +141,7 @@ struct ImportMenu: View {
             Button("Import a folder", systemImage: "folder.badge.plus") { library.importFolder = true }
             Button("Scan shared Import folder", systemImage: "arrow.triangle.2.circlepath") { library.scanInbox() }
         } label: { Image(systemName: "plus.circle.fill").font(.title3) }
-        .disabled(library.isImporting).accessibilityLabel("Import music")
+        .disabled(library.isImporting || library.storageCleanupActive).accessibilityLabel("Import music")
     }
 }
 

@@ -11,6 +11,9 @@ final class LibraryModel: ObservableObject {
     let player: PlaybackService
     private let importer: ImportService
     private var importTask: Task<Void, Never>?
+    @Published private(set) var storageCleanupActive = false
+    @Published private(set) var pendingSongDeletions = 0
+    var canCleanStorage: Bool { !isImporting && !storageCleanupActive && pendingSongDeletions == 0 }
     @Published var revision = 0
     @Published var selectedTab: AppTab = .home
     @Published var searchFocusRequest = 0
@@ -58,13 +61,20 @@ final class LibraryModel: ObservableObject {
     }
 
     func importURLs(_ urls: [URL]) {
-        guard !isImporting else { return }
+        guard !isImporting, !storageCleanupActive else { return }
         isImporting = true; progress = ImportProgress()
         importTask = Task {
             await importer.run(urls) { [weak self] update in await self?.receiveProgress(update) }
             isImporting = false; showImportReport = true
             await refresh()
         }
+    }
+
+    func cleanupOriginals(_ urls: [URL]) async throws -> Int {
+        guard canCleanStorage else { throw LibraryError.message("Finish importing or deleting songs before cleaning storage.") }
+        storageCleanupActive = true
+        defer { storageCleanupActive = false }
+        return try await StorageService(paths: paths, db: db).removeVerified(urls)
     }
 
     func cancelImport() { importTask?.cancel() }
@@ -91,7 +101,9 @@ final class LibraryModel: ObservableObject {
     }
 
     func delete(_ song: Song) async {
-        guard !isImporting else { errorMessage = "Finish or cancel the import before deleting songs."; return }
+        guard !isImporting, !storageCleanupActive else { errorMessage = "Finish the import or storage cleanup before deleting songs."; return }
+        pendingSongDeletions += 1
+        defer { pendingSongDeletions -= 1 }
         let original = paths.audioURL(for: song)
         let trash = paths.staging.appendingPathComponent("delete-" + song.id)
         let exists = FileManager.default.fileExists(atPath: original.path)

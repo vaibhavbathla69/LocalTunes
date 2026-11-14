@@ -60,12 +60,12 @@ actor StorageService {
             guard let destination = try await managedCopy(for: source) else { continue }
             var coordinationError: NSError?
             var operationError: Error?
-            NSFileCoordinator(filePresenter: nil).coordinate(writingItemAt: source, options: .forDeleting, error: &coordinationError) { coordinated in
+            NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: destination, options: [], writingItemAt: source, options: .forDeleting, error: &coordinationError) { managed, coordinated in
                 do {
                     // Recheck inside coordination: a review may have been open
                     // while Files changed the original or the managed copy.
-                    guard inside(coordinated, root: paths.inbox), inside(destination, root: paths.music),
-                          try LibraryPaths.fingerprint(coordinated) == LibraryPaths.fingerprint(destination) else { return }
+                    guard inside(coordinated, root: paths.inbox), inside(managed, root: paths.music),
+                          try LibraryPaths.fingerprint(coordinated) == LibraryPaths.fingerprint(managed) else { return }
                     try FileManager.default.removeItem(at: coordinated)
                     removed += 1
                 } catch { operationError = error }

@@ -19,7 +19,7 @@ struct StorageView: View {
                 Text("Only originals with a byte-for-byte verified copy in your music library can be removed. Unimported files and lyric sidecars are kept.").font(.footnote).foregroundStyle(.secondary)
                 ForEach(usage.verified, id: \.self) { Text($0.lastPathComponent).font(.caption).lineLimit(2) }
                 Button("Remove verified originals", role: .destructive) { confirming = true }
-                    .disabled(busy || usage.verified.isEmpty || library.isImporting)
+                    .disabled(busy || usage.verified.isEmpty || !library.canCleanStorage)
             }
             if busy { ProgressView("Checking complete file contents…") }
             if let message { Text(message).font(.footnote) }
@@ -28,10 +28,10 @@ struct StorageView: View {
             .confirmationDialog("Remove verified originals from Import?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Remove originals", role: .destructive) {
                     Task {
-                        guard !library.isImporting else { return }
+                        guard library.canCleanStorage else { return }
                         busy = true
                         do {
-                            let count = try await StorageService(paths: library.paths, db: library.db).removeVerified(usage.verified)
+                            let count = try await library.cleanupOriginals(usage.verified)
                             message = "Removed \(count) original files."
                         } catch { message = error.localizedDescription }
                         busy = false
