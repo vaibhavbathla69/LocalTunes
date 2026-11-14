@@ -129,7 +129,7 @@ struct BookmarksView: View {
                         guard try await library.db.song(bookmark.songID) != nil else { throw LibraryError.message("This song is no longer in your library.") }
                         await player.play(ids: [bookmark.songID], shuffled: false); player.seek(bookmark.seconds)
                     } catch { library.errorMessage = error.localizedDescription }
-                } } label: { HStack { Text(bookmark.title); Spacer(); Text(bookmark.seconds.clock).foregroundStyle(.secondary) } }
+                } } label: { HStack { Text(bookmark.title); Spacer(); Text(bookmark.seconds.clock).foregroundStyle(.secondary) } }.accessibilityLabel(bookmark.title).accessibilityValue(bookmark.seconds.clock)
             }.onDelete { offsets in bookmarks.remove(atOffsets: offsets); Task { await save() } }
         }.disabled(busy).navigationTitle("Bookmarks & repeat")
             .task { do { bookmarks = try await library.db.state("playback.bookmarks", as: [PlaybackBookmark].self) ?? [] } catch { library.errorMessage = error.localizedDescription } }

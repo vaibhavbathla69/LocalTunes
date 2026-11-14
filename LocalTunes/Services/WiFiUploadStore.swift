@@ -56,7 +56,7 @@ actor WiFiUploadStore {
         return upload
     }
     func begin(name: String, size: Int64, modified: String, relative: String) throws -> Upload {
-        guard !name.isEmpty, name.utf8.count <= 240, !name.contains("/"), !name.contains("\\"),
+        guard !name.isEmpty, !name.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }), name.utf8.count <= 240, !name.contains("/"), !name.contains("\\"),
               ImportService.extensions.union(["lrc", "txt"]).contains((name as NSString).pathExtension.lowercased()),
               size > 0, size <= 20 * 1_073_741_824, relative.utf8.count <= 4096, modified.count < 100 else { throw LibraryError.message("Unsupported file or size (maximum 20 GB per file)") }
         let key = Self.digest(try JSONEncoder().encode([name, String(size), modified, relative]))

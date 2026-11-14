@@ -103,6 +103,21 @@ final class ListeningToolsTests: XCTestCase {
         var wrong = URLComponents(url: url, resolvingAgainstBaseURL: false)!; wrong.path = "/wrong/"
         let denied = try await HTTPProbe.get(url: wrong.url!)
         XCTAssertTrue(denied.contains("404 Response"))
+        let content = Data("wire test".utf8)
+        let beginBody = try JSONSerialization.data(withJSONObject: ["name":"Tone.flac", "size":content.count, "modified":"1", "relative":"Tone.flac"])
+        let response = try await HTTPProbe.request(url: url.appendingPathComponent("begin"), method: "POST", body: beginBody)
+        let payload = try XCTUnwrap(response.components(separatedBy: "\r\n\r\n").last?.data(using: .utf8))
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        let uploadID = try XCTUnwrap(json["id"] as? String)
+        var chunk = URLComponents(url: url.appendingPathComponent("chunk"), resolvingAgainstBaseURL: false)!
+        chunk.queryItems = [URLQueryItem(name: "id", value: uploadID), URLQueryItem(name: "offset", value: "0")]
+        let accepted = try await HTTPProbe.request(url: chunk.url!, method: "POST", body: content, extra: "X-Chunk-SHA256: " + WiFiUploadStore.digest(content) + "\r\n")
+        XCTAssertTrue(accepted.contains("200 Response"))
+        var finish = URLComponents(url: url.appendingPathComponent("finish"), resolvingAgainstBaseURL: false)!
+        finish.queryItems = [URLQueryItem(name: "id", value: uploadID)]
+        let complete = try await HTTPProbe.request(url: finish.url!, method: "POST")
+        XCTAssertTrue(complete.contains("200 Response")); XCTAssertEqual(service.received.count, 1)
+        XCTAssertEqual(try Data(contentsOf: service.received[0]), content)
     }
 }
 
@@ -110,10 +125,12 @@ private final class HTTPProbe: @unchecked Sendable {
     private let connection: NWConnection
     private var continuation: CheckedContinuation<String, Error>?
     private var data = Data()
+    private let queue = DispatchQueue(label: "LocalTunes.HTTPTest")
     private init(url: URL) {
         connection = NWConnection(host: NWEndpoint.Host(url.host!), port: NWEndpoint.Port(rawValue: UInt16(url.port!))!, using: .tcp)
     }
-    static func get(url: URL) async throws -> String {
+    static func get(url: URL) async throws -> String { try await request(url: url) }
+    static func request(url: URL, method: String = "GET", body: Data = Data(), extra: String = "") async throws -> String {
         let probe = HTTPProbe(url: url)
         return try await withCheckedThrowingContinuation { continuation in
             probe.continuation = continuation
@@ -121,13 +138,16 @@ private final class HTTPProbe: @unchecked Sendable {
                 switch state {
                 case .ready:
                     probe.connection.stateUpdateHandler = nil
-                    let request = "GET \(url.path.hasSuffix("/") ? url.path : url.path + (url.path.hasSuffix(".js") ? "" : "/")) HTTP/1.1\r\nHost: \(url.host!):\(url.port!)\r\nConnection: close\r\n\r\n"
-                    probe.connection.send(content: Data(request.utf8), completion: .contentProcessed { error in if let error { probe.finish(.failure(error)) } else { probe.receive() } })
+                    let path = (url.path.hasSuffix("/") ? url.path : url.path + (url.path.hasSuffix(".js") ? "" : "/")) + (url.query.map { "?" + $0 } ?? "")
+                    let header = "\(method) \(path) HTTP/1.1\r\nHost: \(url.host!):\(url.port!)\r\nContent-Length: \(body.count)\r\n\(extra)Connection: close\r\n\r\n"
+                    var request = Data(header.utf8); request.append(body)
+                    probe.connection.send(content: request, completion: .contentProcessed { error in if let error { probe.finish(.failure(error)) } else { probe.receive() } })
                 case .failed(let error): probe.finish(.failure(error))
                 default: break
                 }
             }
-            probe.connection.start(queue: DispatchQueue(label: "LocalTunes.HTTPTest"))
+            probe.connection.start(queue: probe.queue)
+            probe.queue.asyncAfter(deadline: .now() + 20) { if probe.continuation != nil { probe.finish(.failure(URLError(.timedOut))) } }
         }
     }
     private func receive() {
@@ -138,5 +158,5 @@ private final class HTTPProbe: @unchecked Sendable {
             else { self.receive() }
         }
     }
-    private func finish(_ result: Result<String, Error>) { let callback = continuation; continuation = nil; connection.cancel(); callback?.resume(with: result) }
+    private func finish(_ result: Result<String, Error>) { let callback = continuation; continuation = nil; connection.stateUpdateHandler = nil; connection.cancel(); callback?.resume(with: result) }
 }

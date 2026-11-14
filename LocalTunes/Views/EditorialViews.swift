@@ -43,7 +43,7 @@ struct SystemVolumeControl: UIViewRepresentable {
         view.tintColor = UIColor(Palette.accent)
         return view
     }
-    func updateUIView(_ view: MPVolumeView, context: Context) { }
+    func updateUIView(_ view: MPVolumeView, context: Context) { view.tintColor = UIColor(Palette.accent) }
 }
 
 struct AudioFormatBadge: View {

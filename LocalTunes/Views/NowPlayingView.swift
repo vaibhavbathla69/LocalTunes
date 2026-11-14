@@ -145,7 +145,7 @@ struct RoutePicker: UIViewRepresentable {
         view.tintColor = .white; view.activeTintColor = UIColor(Palette.accent); view.prioritizesVideoDevices = false
         return view
     }
-    func updateUIView(_ uiView: AVRoutePickerView, context: Context) { }
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) { uiView.activeTintColor = UIColor(Palette.accent) }
 }
 
 struct QueueView: View {

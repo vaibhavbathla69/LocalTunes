@@ -39,10 +39,10 @@ final class WiFiTransferService: ObservableObject {
             UIApplication.shared.isIdleTimerDisabled = true
             message = "Starting local transfer"
             listener.stateUpdateHandler = { [weak self, weak listener] state in Task { @MainActor in
-                guard let self, self.listener === listener else { return }
+                guard let self, let listener, self.listener === listener else { return }
                 switch state {
                 case .ready:
-                    if let port = listener?.port { self.address = "http://\(ip):\(port.rawValue)/\(self.token)/"; self.running = true; self.message = "Ready for files from your PC" }
+                    if let port = listener.port { self.address = "http://\(ip):\(port.rawValue)/\(self.token)/"; self.running = true; self.message = "Ready for files from your PC" }
                 case .failed(let error): self.stop(); self.message = error.localizedDescription
                 case .waiting(let error): self.message = "Waiting for local network access: \(error.localizedDescription)"
                 default: break

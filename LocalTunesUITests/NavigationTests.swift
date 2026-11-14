@@ -352,6 +352,51 @@ final class NavigationTests: XCTestCase {
     }
 
     @MainActor
+    func testPersonalListeningToolsAndAppearance() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.buttons["Open settings"].tap()
+        let appearance = app.buttons["Appearance"]; scrollTo(appearance, app: app); appearance.tap()
+        XCTAssertTrue(app.navigationBars["Appearance"].waitForExistence(timeout: 5))
+        capture(app, name: "40-Appearance")
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["song.CI reference tone"].tap()
+        XCTAssertTrue(app.buttons["miniPlayer"].waitForExistence(timeout: 5))
+        app.buttons["miniPlayer"].tap()
+        app.buttons["nowPlaying.options"].tap()
+        app.buttons["Bookmarks & A-B repeat"].tap()
+        XCTAssertTrue(app.buttons["Bookmark current position"].waitForExistence(timeout: 5))
+        app.buttons["Bookmark current position"].tap()
+        let bookmarkName = app.alerts["Bookmark"].textFields.firstMatch
+        bookmarkName.tap(); bookmarkName.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (bookmarkName.value as? String)?.count ?? 0)); bookmarkName.typeText("Bridge")
+        app.alerts["Bookmark"].buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Bridge"].waitForExistence(timeout: 5))
+        capture(app, name: "41-Bookmarks")
+        app.buttons["Done"].tap()
+        if !app.buttons["nowPlaying.lyrics"].isHittable { app.swipeUp() }
+        app.buttons["nowPlaying.lyrics"].tap()
+        app.buttons["Lyric options"].tap()
+        app.buttons["Synchronize or adjust timing"].tap()
+        XCTAssertTrue(app.navigationBars["Lyrics timing"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Save"].isEnabled)
+        capture(app, name: "42-LyricsTiming")
+        app.buttons["Save"].tap()
+        app.buttons["Done"].tap()
+        app.buttons["Close Now Playing"].tap()
+        app.tabBars.buttons["Playlists"].tap()
+        app.buttons["Custom mixes"].tap()
+        app.buttons["Create smart mix"].tap()
+        app.textFields["Mix name"].tap(); app.textFields["Mix name"].typeText("Evening mix")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Evening mix"].waitForExistence(timeout: 5))
+        app.buttons["Evening mix"].tap()
+        XCTAssertTrue(app.navigationBars["Evening mix"].waitForExistence(timeout: 5))
+        capture(app, name: "43-CustomMix")
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

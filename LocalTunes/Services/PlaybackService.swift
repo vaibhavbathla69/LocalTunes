@@ -52,6 +52,7 @@ final class PlaybackService: ObservableObject {
     private var listeningTask: Task<Void, Never>?
     private var statsSongID: String?
     private var statsEntryID: String?
+    private var statsVisitID: String?
     private var pendingSeconds: Double = 0
     private var pendingPlays = 0
     private var heardInEntry: Double = 0
@@ -691,7 +692,7 @@ final class PlaybackService: ObservableObject {
     }
     private func beginListening(song: Song, entry: QueueEntry, forceNew: Bool = false) {
         if forceNew || statsEntryID != entry.id {
-            enqueueListening(); statsSongID = song.id; statsEntryID = entry.id
+            enqueueListening(); statsSongID = song.id; statsEntryID = entry.id; statsVisitID = UUID().uuidString
             heardInEntry = 0; countedEntry = false
         }
         resetTick(0)
@@ -709,7 +710,7 @@ final class PlaybackService: ObservableObject {
     }
     private func enqueueListening() {
         guard let id = statsSongID, pendingSeconds > 0 || pendingPlays > 0 else { return }
-        let seconds = pendingSeconds, plays = pendingPlays, previous = listeningTask, entryID = statsEntryID
+        let seconds = pendingSeconds, plays = pendingPlays, previous = listeningTask, entryID = statsVisitID ?? statsEntryID
         pendingSeconds = 0; pendingPlays = 0
         listeningTask = Task {
             await previous?.value

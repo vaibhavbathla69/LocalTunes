@@ -123,6 +123,8 @@ final class FLACPlaybackTests: XCTestCase {
         player.pause(); await player.flushListening()
         let report = try await db.listeningReport()
         XCTAssertEqual(report.plays, 2)
+        let sessions = try await db.listeningSessions()
+        XCTAssertEqual(sessions.flatMap(\.visits).count, 2)
         XCTAssertGreaterThan(report.seconds, 5)
     }
     @MainActor

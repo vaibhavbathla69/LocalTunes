@@ -21,7 +21,10 @@ struct LyricTimingView: View {
                 Section("Tap along") {
                     Text(times.count < lines.count ? lines[times.count] : "Every line is timed").font(.title3.bold())
                     HStack {
-                        Button(player.isPlaying ? "Pause" : "Play") { Task { await player.toggle() } }
+                        Button(player.currentSong?.id == song.id && player.isPlaying ? "Pause" : "Play") { Task {
+                            if player.currentSong?.id == song.id { await player.toggle() }
+                            else { await player.play(ids: [song.id], shuffled: false) }
+                        } }
                         Text(player.position.clock).monospacedDigit()
                         Button("Stamp line") { times.append(player.position) }.disabled(times.count >= lines.count || player.currentSong?.id != song.id || (times.last ?? -1) >= player.position)
                     }
