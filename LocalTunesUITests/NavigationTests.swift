@@ -321,6 +321,35 @@ final class NavigationTests: XCTestCase {
     }
 
     @MainActor
+    func testStorageAudioDetailsAndAnnualStats() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launch()
+        XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
+        app.buttons["Open settings"].tap()
+        app.buttons["Storage and import cleanup"].tap()
+        let remove = app.buttons["Remove verified originals"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 10))
+        XCTAssertFalse(remove.isEnabled)
+        capture(app, name: "37-StorageReview")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["settings.stats"].tap()
+        app.buttons["This year"].tap()
+        XCTAssertTrue(app.buttons["Share recap"].waitForExistence(timeout: 5))
+        capture(app, name: "38-AnnualStats")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.tabBars.buttons["Library"].tap()
+        let song = app.buttons["song.CI reference tone"]
+        XCTAssertTrue(song.waitForExistence(timeout: 5))
+        song.press(forDuration: 1)
+        app.buttons["Audio details"].tap()
+        XCTAssertTrue(app.navigationBars["Audio details"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["16-bit"].waitForExistence(timeout: 5))
+        capture(app, name: "39-AudioDetails")
+        app.buttons["Done"].tap()
+    }
+
+    @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
