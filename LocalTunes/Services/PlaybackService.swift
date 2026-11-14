@@ -17,6 +17,10 @@ final class PlaybackService: ObservableObject {
     @Published private(set) var volumeBalancing = UserDefaults.standard.bool(forKey: "volume.balancing")
     @Published private(set) var sleepTimer = SleepTimerState()
     @Published private(set) var isCrossfading = false
+    @Published private(set) var repeatA: Double?
+    @Published private(set) var repeatB: Double?
+    private var repeatSongID: String?
+    private var loopingSection = false
     @Published private(set) var analysisProgress: String?
 
     private var player = AVQueuePlayer()
@@ -244,6 +248,7 @@ final class PlaybackService: ObservableObject {
         let timerExpired = sleepTimer.expired(at: Date(), currentEntry: queue.currentID)
         if timerExpired { clearSleepState() }
         wantsPlayback = autoplay && !timerExpired
+        clearSectionRepeat()
         generation += 1
         let token = generation
         isRebuilding = true
@@ -420,7 +425,18 @@ final class PlaybackService: ObservableObject {
         }
         if isPlaying && abs(position - lastSavedPosition) >= 10 { savePosition() }
         if sleepTimer.expired(at: Date(), currentEntry: queue.currentID) { pauseForTimer(); return }
-        if isPlaying { startCrossfadeIfReady() }
+        if let repeatSongID, repeatSongID != currentSong?.id { clearSectionRepeat() }
+        if isPlaying, !loopingSection, let a = repeatA, let b = repeatB, position >= b {
+            loopingSection = true
+            let token = generation, active = player
+            player.seek(to: CMTime(seconds: a, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.generation == token, self.player === active else { return }
+                    self.resetTick(a); self.position = a; self.loopingSection = false
+                }
+            }
+        }
+        if isPlaying, repeatA == nil { startCrossfadeIfReady() }
     }
 
     private func updateNowPlaying(loadArtwork: Bool = false) {
@@ -641,6 +657,17 @@ final class PlaybackService: ObservableObject {
         }
     }
 
+    func markRepeatA() {
+        cancelFade(); repeatA = position; repeatB = nil; repeatSongID = currentSong?.id
+    }
+    func markRepeatB() {
+        guard let a = repeatA, position >= a + 0.25, repeatSongID == currentSong?.id else { return }
+        let end = min(position, duration - 0.5)
+        guard end >= a + 0.25 else { errorMessage = "Choose a loop start earlier in the song."; return }
+        repeatB = end
+    }
+    func clearSectionRepeat() { repeatA = nil; repeatB = nil; repeatSongID = nil; loopingSection = false }
+
     func setSleepTimer(minutes: Int? = nil, endOfSong: Bool = false) async {
         clearSleepState()
         if endOfSong { sleepTimer.entryID = queue.currentID }
@@ -682,11 +709,11 @@ final class PlaybackService: ObservableObject {
     }
     private func enqueueListening() {
         guard let id = statsSongID, pendingSeconds > 0 || pendingPlays > 0 else { return }
-        let seconds = pendingSeconds, plays = pendingPlays, previous = listeningTask
+        let seconds = pendingSeconds, plays = pendingPlays, previous = listeningTask, entryID = statsEntryID
         pendingSeconds = 0; pendingPlays = 0
         listeningTask = Task {
             await previous?.value
-            do { try await db.recordListening(id, seconds: seconds, plays: plays) } catch { report(error) }
+            do { try await db.recordListening(id, seconds: seconds, plays: plays, entryID: entryID) } catch { report(error) }
         }
     }
     func flushListening() async {

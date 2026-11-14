@@ -52,7 +52,7 @@ struct SongListView: View {
                     Label("Songs", systemImage: "music.note.list").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
                     Spacer()
                     Button { Task { await library.play(search: search, favourite: favourite, group: group, value: groupValue, sort: sort, shuffled: true, searchFilters: searchFilters, smart: smart) } } label: { Image(systemName: "shuffle").font(.title3).frame(width: 44, height: 44) }.buttonStyle(.plain).accessibilityLabel("Shuffle these songs")
-                    Button { play(nil) } label: { Image(systemName: "play.fill").foregroundStyle(.white).frame(width: 46, height: 46).background(Palette.accent, in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Play these songs")
+                    Button { play(nil) } label: { Image(systemName: "play.fill").foregroundStyle(Palette.onAccent).frame(width: 46, height: 46).background(Palette.accent, in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Play these songs")
                 }.listRowSeparator(.hidden).listRowBackground(Color.clear)
             }
             ForEach(songs) { song in SongRow(song: song) { play(song.id) }.listRowSeparator(.hidden).listRowBackground(Color.clear) }

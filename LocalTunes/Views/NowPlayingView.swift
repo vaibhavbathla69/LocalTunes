@@ -17,6 +17,7 @@ struct NowPlayingView: View {
     @State private var artistName: String?
     @State private var options = false
     @State private var artistCredits = false
+    @State private var bookmarks = false
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
@@ -71,12 +72,14 @@ struct NowPlayingView: View {
                             Button("Edit details", systemImage: "pencil") { editing = true }
                         }
                         Button(player.sleepTimer.isActive ? "Sleep timer (on)" : "Sleep timer", systemImage: "moon.zzz") { timer = true }
+                        Button("Bookmarks & A-B repeat", systemImage: "bookmark") { bookmarks = true }
                         Button("Playback settings", systemImage: "slider.horizontal.3") { playbackOptions = true }
                         Button("Queue", systemImage: "list.bullet") { queue = true }
                         Button("Show lyrics", systemImage: "quote.bubble") { lyrics = true }
             }
             .fullScreenCover(isPresented: $lyrics) { LyricsView() }
             .sheet(isPresented: $queue) { QueueView() }
+            .sheet(isPresented: $bookmarks) { NavigationStack { BookmarksView().toolbar { Button("Done") { bookmarks = false } } } }
             .sheet(isPresented: $timer) { SleepTimerView() }
             .sheet(isPresented: $editing) { if let song = player.currentSong { SongEditorView(song: song) } }
             .sheet(isPresented: $artistCredits) { if let song = player.currentSong { ArtistCreditsView(song: song) } }
@@ -112,7 +115,7 @@ struct NowPlayingView: View {
             Button { Task { await player.toggleShuffle() } } label: { Image(systemName: "shuffle").font(.title3).frame(maxWidth: .infinity, minHeight: 48).foregroundStyle(player.queue.shuffle ? Palette.accent : .white.opacity(0.65)) }.accessibilityLabel(player.queue.shuffle ? "Shuffle on" : "Shuffle off")
             Button { Task { await player.previous() } } label: { Image(systemName: "backward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Previous song")
             Button { Task { await player.toggle() } } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 29, weight: .semibold)).foregroundStyle(.white).frame(width: 74, height: 74).background(Palette.accent, in: Circle()).shadow(color: .black.opacity(0.15), radius: 15, y: 6)
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 29, weight: .semibold)).foregroundStyle(Palette.onAccent).frame(width: 74, height: 74).background(Palette.accent, in: Circle()).shadow(color: .black.opacity(0.15), radius: 15, y: 6)
             }.accessibilityLabel(player.isPlaying ? "Pause" : "Play").accessibilityIdentifier("nowPlaying.playPause")
             Button { Task { await player.next() } } label: { Image(systemName: "forward.end.fill").font(.system(size: 29)).frame(maxWidth: .infinity, minHeight: 54) }.accessibilityLabel("Next song").accessibilityIdentifier("nowPlaying.next")
             Button { Task { await player.cycleRepeat() } } label: { Image(systemName: player.queue.repeatMode.symbol).font(.title3).frame(maxWidth: .infinity, minHeight: 48).foregroundStyle(player.queue.repeatMode != .off ? Palette.accent : .white.opacity(0.65)) }.accessibilityLabel("Repeat \(player.queue.repeatMode.rawValue)")

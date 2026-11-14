@@ -139,6 +139,22 @@ final class FLACPlaybackTests: XCTestCase {
         await player.setVolumeBalancing(false)
     }
     @MainActor
+    func testABRepeatKeepsPlayingTheSelectedSongAndClearsOnNext() async throws {
+        let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let player = PlaybackService(db: db, paths: paths)
+        await player.setCrossfade(0); await player.play(ids: songs.map(\.id))
+        let start = await waitUntil { player.position > 0.4 }; XCTAssertTrue(start)
+        player.markRepeatA()
+        let end = await waitUntil { player.position > 1.2 }; XCTAssertTrue(end)
+        player.markRepeatB(); XCTAssertNotNil(player.repeatB)
+        try await Task.sleep(nanoseconds: 4_000_000_000)
+        XCTAssertEqual(player.currentSong?.id, songs[0].id)
+        XCTAssertLessThan(player.position, 2)
+        await player.next(); XCTAssertNil(player.repeatA); XCTAssertNil(player.repeatB)
+        player.pause()
+    }
+
+    @MainActor
     private func waitUntil(_ condition: () -> Bool) async -> Bool {
         for _ in 0..<200 {
             if condition() { return true }

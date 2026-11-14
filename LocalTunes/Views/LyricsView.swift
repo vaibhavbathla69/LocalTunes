@@ -11,6 +11,7 @@ struct LyricsView: View {
     @State private var raw = ""
     @State private var parsed = LyricsParser.parse("")
     @State private var editing = false
+    @State private var timing = false
     @State private var attaching = false
     @State private var error: String?
     private var active: Int? { parsed.activeIndex(at: player.position) }
@@ -58,7 +59,7 @@ struct LyricsView: View {
                         ScrollView { Text(parsed.plainText).font(.title3.weight(.medium)).lineSpacing(12).textSelection(.enabled).padding(28).frame(maxWidth: .infinity, alignment: .leading) }
                     }
                     if parsed.isSynchronized && !following && autoFollow {
-                        Button("Follow lyrics", systemImage: "arrow.down.to.line") { following = true }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.background).padding(.bottom, 20)
+                        Button("Follow lyrics", systemImage: "arrow.down.to.line") { following = true }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.onAccent).padding(.bottom, 20)
                     }
                 } else { ContentUnavailableView("Play a song to see lyrics", systemImage: "quote.bubble") }
             }
@@ -68,6 +69,7 @@ struct LyricsView: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("Synchronize or adjust timing", systemImage: "metronome") { timing = true }
                         Button("Edit or paste lyrics", systemImage: "pencil") { editing = true }
                         Button("Attach LRC or text file", systemImage: "doc") { attaching = true }
                         Toggle("Follow automatically", isOn: $autoFollow)
@@ -75,6 +77,7 @@ struct LyricsView: View {
                 }
             }
             .task(id: "\(player.currentSong?.id ?? "")|\(library.revision)") { await loadLyrics() }
+            .sheet(isPresented: $timing) { if let song = player.currentSong { LyricTimingView(song: song, raw: raw) } }
             .sheet(isPresented: $editing) { if let song = player.currentSong { LyricsEditor(song: song, initial: raw) } }
             .fileImporter(isPresented: $attaching, allowedContentTypes: [.item]) { result in
                 guard let song = player.currentSong else { return }

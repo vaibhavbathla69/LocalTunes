@@ -5,7 +5,24 @@ import Combine
 enum Palette {
     static let background = Color(uiColor: .systemBackground)
     static let surface = Color(uiColor: .secondarySystemBackground)
-    static let accent = Color(red: 250.0 / 255, green: 36.0 / 255, blue: 60.0 / 255)
+    private static func accentComponents(dark: Bool) -> (Double, Double, Double) {
+        let mode = UserDefaults.standard.string(forKey: "theme.accent") ?? "crimson"
+        let hex = mode == "custom" ? UserDefaults.standard.string(forKey: "theme.custom") : (mode == "artwork" ? UserDefaults.standard.string(forKey: "theme.artwork") : "FA243C")
+        return ThemeContrast.components(hex ?? "FA243C", dark: dark, adjust: mode != "crimson")
+    }
+    static var accent: Color {
+        Color(uiColor: UIColor { traits in
+            let rgb = accentComponents(dark: traits.userInterfaceStyle == .dark)
+            return UIColor(red: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+        })
+    }
+    static var onAccent: Color {
+        Color(uiColor: UIColor { traits in
+            if (UserDefaults.standard.string(forKey: "theme.accent") ?? "crimson") == "crimson" { return .white }
+            let rgb = accentComponents(dark: traits.userInterfaceStyle == .dark)
+            return ThemeContrast.luminance(rgb) > 0.179 ? .black : .white
+        })
+    }
     static let muted = Color.secondary
 }
 

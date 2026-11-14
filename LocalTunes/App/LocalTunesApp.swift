@@ -2,15 +2,21 @@ import SwiftUI
 
 @main
 struct LocalTunesApp: App {
+    @AppStorage("theme.appearance") private var appearance = "system"
+    @AppStorage("theme.accent") private var accent = "crimson"
+    @AppStorage("theme.custom") private var custom = "FA243C"
+    @AppStorage("theme.artwork") private var artwork = "FA243C"
+
     private var testAppearance: ColorScheme? {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-test-dark") { return .dark }
         if ProcessInfo.processInfo.arguments.contains("--ui-test-light") { return .light }
         #endif
-        return nil
+        return appearance == "dark" ? .dark : (appearance == "light" ? .light : nil)
     }
+    private var currentAccent: Color { let _ = [accent, custom, artwork]; return Palette.accent }
     var body: some Scene {
-        WindowGroup { BootstrapView().tint(Palette.accent).preferredColorScheme(testAppearance) }
+        WindowGroup { BootstrapView().tint(currentAccent).preferredColorScheme(testAppearance) }
     }
 }
 

@@ -10,6 +10,7 @@
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
   <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>NSLocalNetworkUsageDescription</key><string>Receive music from your PC over your local Wi-Fi network while the transfer screen is open.</string>
   <key>LSRequiresIPhoneOS</key><true/>
   <key>UILaunchScreen</key><dict/>
   <key>UIBackgroundModes</key><array><string>audio</string></array>

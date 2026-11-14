@@ -74,7 +74,7 @@ struct FilterPill: View {
                 if let icon { Image(systemName: icon) }
                 Text(title)
             }.font(.subheadline.weight(.semibold)).padding(.horizontal, 18).padding(.vertical, 11)
-                .foregroundStyle(selected ? Color.white : Color.primary)
+                .foregroundStyle(selected ? Palette.onAccent : Color.primary)
                 .background(selected ? Palette.accent : Palette.surface, in: Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }

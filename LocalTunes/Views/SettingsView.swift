@@ -26,6 +26,11 @@ struct SettingsView: View {
                 NavigationLink { PlaybackOptionsView() } label: { Label("Playback", systemImage: "slider.horizontal.3") }.accessibilityIdentifier("settings.playback")
                 NavigationLink { ListeningStatsView() } label: { Label("Listening stats", systemImage: "chart.bar") }.accessibilityIdentifier("settings.stats")
             }
+            Section {
+                NavigationLink { SessionsView() } label: { Label("Listening sessions", systemImage: "clock.arrow.circlepath") }
+                NavigationLink { BookmarksView() } label: { Label("Bookmarks & repeat", systemImage: "bookmark") }
+            }
+            Section { NavigationLink { AppearanceView() } label: { Label("Appearance", systemImage: "paintpalette") } }
             Section("On this iPhone") {
                 NavigationLink { StorageView() } label: { Label("Storage and import cleanup", systemImage: "internaldrive") }
                 LabeledContent("Songs", value: "\(library.songCount)")
@@ -34,6 +39,7 @@ struct SettingsView: View {
                 Text("Artwork, lyrics, database and source copies in Import use additional space. Imports need room for an app-owned copy. Duplicate detection compares complete file hashes.").font(.footnote).foregroundStyle(.secondary)
             }
             Section("Import music") {
+                NavigationLink { WiFiTransferView() } label: { Label("Wi-Fi transfer from PC", systemImage: "wifi") }
                 Button("Choose audio and lyric files", systemImage: "doc.badge.plus") { library.importFiles = true }
                 Button("Choose a folder", systemImage: "folder.badge.plus") { library.importFolder = true }
                 Button("Scan shared Import folder", systemImage: "arrow.triangle.2.circlepath") { library.scanInbox() }

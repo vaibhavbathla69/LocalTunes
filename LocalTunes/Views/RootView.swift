@@ -31,6 +31,14 @@ struct RootView: View {
         .alert("Playback", isPresented: Binding(get: { player.errorMessage != nil }, set: { if !$0 { player.errorMessage = nil } })) {
             Button("OK") { player.errorMessage = nil }
         } message: { Text(player.errorMessage ?? "") }
+        .task(id: "\(player.currentSong?.id ?? "")|\(player.currentSong?.artworkPath ?? "")") {
+            guard let song = player.currentSong else { return }
+            let url = song.artworkPath.map { library.paths.documents.appendingPathComponent($0) }
+            let colors = await ArtworkColorLoader.shared.colors(artwork: url, seed: song.album)
+            guard !Task.isCancelled else { return }
+            let c = colors.secondary
+            UserDefaults.standard.set(String(format: "%02X%02X%02X", Int(c.red * 255), Int(c.green * 255), Int(c.blue * 255)), forKey: "theme.artwork")
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { player.savePosition() }
             else { Task { await library.refresh() } }

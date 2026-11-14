@@ -66,6 +66,12 @@ actor LibraryDatabase {
           song_id TEXT PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
           seconds REAL NOT NULL DEFAULT 0, plays INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS listening_visits (
+          id TEXT PRIMARY KEY, entry_id TEXT NOT NULL, song_id TEXT NOT NULL,
+          title TEXT NOT NULL, artist TEXT NOT NULL, started REAL NOT NULL,
+          ended REAL NOT NULL, seconds REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS listening_visits_entry ON listening_visits(entry_id,ended);
         CREATE TABLE IF NOT EXISTS listening_daily (
           song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
           day REAL NOT NULL, seconds REAL NOT NULL DEFAULT 0, plays INTEGER NOT NULL DEFAULT 0,
@@ -422,11 +428,22 @@ actor LibraryDatabase {
         return current
     }
 
-    func recordListening(_ id: String, seconds: Double, plays: Int) throws {
+    func recordListening(_ id: String, seconds: Double, plays: Int, entryID: String? = nil) throws {
         guard seconds.isFinite, seconds >= 0, plays >= 0, try song(id) != nil else { return }
         try execute("BEGIN IMMEDIATE")
         do {
             try execute("INSERT INTO listening(song_id,seconds,plays) VALUES(?,?,?) ON CONFLICT(song_id) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(seconds), String(plays)])
+            if let entryID, seconds > 0, let song = try song(id) {
+                let now = Date().timeIntervalSince1970
+                let prior = try prepare("SELECT id FROM listening_visits WHERE entry_id=? AND ended>=? ORDER BY ended DESC LIMIT 1", [entryID, String(now - 1800)])
+                let priorID = sqlite3_step(prior) == SQLITE_ROW ? String(cString: sqlite3_column_text(prior, 0)) : nil
+                sqlite3_finalize(prior)
+                if let priorID {
+                    try execute("UPDATE listening_visits SET ended=?,seconds=seconds+? WHERE id=?", [String(now), String(seconds), priorID])
+                } else {
+                    try execute("INSERT INTO listening_visits VALUES(?,?,?,?,?,?,?,?)", [UUID().uuidString, entryID, id, song.title, song.artist, String(now - seconds), String(now), String(seconds)])
+                }
+            }
             let day = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
             try execute("INSERT INTO listening_daily(song_id,day,seconds,plays) VALUES(?,?,?,?) ON CONFLICT(song_id,day) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(day), String(seconds), String(plays)])
             try execute("COMMIT")
@@ -488,7 +505,7 @@ actor LibraryDatabase {
     }
     func clearListening() throws {
         try execute("BEGIN IMMEDIATE")
-        do { try execute("DELETE FROM listening"); try execute("DELETE FROM listening_daily"); try execute("COMMIT") }
+        do { try execute("DELETE FROM listening"); try execute("DELETE FROM listening_daily"); try execute("DELETE FROM listening_visits"); try execute("COMMIT") }
         catch { try? execute("ROLLBACK"); throw error }
     }
 
@@ -514,6 +531,33 @@ actor LibraryDatabase {
             albums.append(AlbumActivity(name: name, count: Int(sqlite3_column_int(s, 1)), plays: Int(sqlite3_column_int(s, 2)), representative: cover, key: key))
         }
         return albums
+    }
+
+    func listeningSessions() throws -> [ListeningSession] {
+        let stmt = try prepare("SELECT id,song_id,title,artist,started,ended,seconds FROM listening_visits ORDER BY started DESC LIMIT 10000")
+        defer { sqlite3_finalize(stmt) }
+        var visits: [ListeningVisit] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            visits.append(ListeningVisit(id: String(cString: sqlite3_column_text(stmt, 0)), songID: String(cString: sqlite3_column_text(stmt, 1)), title: String(cString: sqlite3_column_text(stmt, 2)), artist: String(cString: sqlite3_column_text(stmt, 3)), started: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)), ended: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5)), seconds: sqlite3_column_double(stmt, 6)))
+        }
+        return ListeningSession.group(visits)
+    }
+
+    func smartMixIDs(_ rule: SmartMixRule, now: Date = Date()) throws -> [String] {
+        var clauses = ["1=1"], values: [String] = []
+        if !rule.artist.isEmpty { clauses.append("EXISTS(SELECT 1 FROM song_artists WHERE song_id=songs.id AND artist_key=?)"); values.append(try ArtistIndex.resolve(connection, rule.artist)) }
+        if !rule.genre.isEmpty { clauses.append("genre=? COLLATE NOCASE"); values.append(rule.genre) }
+        if let year = rule.fromYear { clauses.append("json_extract(CAST(payload AS TEXT),'$.year')>=CAST(? AS INTEGER)"); values.append(String(year)) }
+        if let year = rule.throughYear { clauses.append("json_extract(CAST(payload AS TEXT),'$.year')<=CAST(? AS INTEGER)"); values.append(String(year)) }
+        if rule.favouritesOnly { clauses.append("favourite=1") }
+        if rule.unplayedOnly { clauses.append("played IS NULL AND COALESCE((SELECT plays FROM listening WHERE song_id=songs.id),0)=0") }
+        if let days = rule.notPlayedDays { clauses.append("(played IS NULL OR played<?)"); values.append(String(now.addingTimeInterval(-Double(max(1, days)) * 86400).timeIntervalSince1970)) }
+        let order = rule.shuffled ? "RANDOM()" : "title COLLATE NOCASE,id"
+        let stmt = try prepare("SELECT id FROM songs WHERE \(clauses.joined(separator: " AND ")) ORDER BY \(order) LIMIT ?", values + [String(min(10000, max(1, rule.limit)))])
+        defer { sqlite3_finalize(stmt) }
+        var ids: [String] = []
+        while sqlite3_step(stmt) == SQLITE_ROW { ids.append(String(cString: sqlite3_column_text(stmt, 0))) }
+        return ids
     }
 
     func fillAlbumArtist(_ snapshot: Song, artist: String) throws {

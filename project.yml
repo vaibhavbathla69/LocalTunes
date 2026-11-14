@@ -13,15 +13,19 @@ settings:
     SWIFT_STRICT_CONCURRENCY: targeted
     TARGETED_DEVICE_FAMILY: "1"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    MARKETING_VERSION: "1.6.0"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "1.7.0"
+    CURRENT_PROJECT_VERSION: "11"
     CODE_SIGNING_ALLOWED: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   LocalTunes:
     type: application
     platform: iOS
-    sources: [LocalTunes]
+    sources:
+      - path: LocalTunes
+        excludes: [Resources/Transfer.js]
+      - path: LocalTunes/Resources/Transfer.js
+        buildPhase: resources
     configFiles:
       Debug: Config/App.xcconfig
       Release: Config/App.xcconfig

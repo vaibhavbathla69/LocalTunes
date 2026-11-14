@@ -6,6 +6,7 @@ struct PlaylistsView: View {
     @State private var name = ""
     var body: some View {
         List {
+            NavigationLink { SmartMixesView() } label: { Label("Custom mixes", systemImage: "slider.horizontal.3") }
             Section("Smart playlists") {
                 ForEach(SmartCollection.allCases) { smart in
                     NavigationLink { SongListView(title: smart.title, sort: smart.sort, smart: smart) } label: { Label(smart.title, systemImage: smart.symbol).padding(.vertical, 8) }
@@ -49,7 +50,7 @@ struct PlaylistDetailView: View {
                 .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let playlist {
                 HStack {
-                    Button { Task { await player.play(ids: playlist.songIDs) } } label: { Label("Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.background)
+                    Button { Task { await player.play(ids: playlist.songIDs) } } label: { Label("Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(Palette.onAccent)
                     Button { Task { await player.play(ids: playlist.songIDs.shuffled()) } } label: { Label("Shuffle", systemImage: "shuffle").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 10) }.buttonStyle(.bordered).tint(Palette.accent)
                 }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             }

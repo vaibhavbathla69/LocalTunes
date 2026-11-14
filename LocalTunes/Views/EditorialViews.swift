@@ -9,10 +9,12 @@ struct ImmersiveArtworkBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var phase
     @State private var colors = ArtworkColors.default
+    @AppStorage("theme.motion") private var motion = true
+    @AppStorage("theme.blur") private var blur = 85.0
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion || phase != .active)) { time in
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion || !motion || phase != .active)) { time in
             GeometryReader { geometry in
-                let drift = reduceMotion ? 0.0 : sin(time.date.timeIntervalSinceReferenceDate / 9)
+                let drift = (reduceMotion || !motion) ? 0.0 : sin(time.date.timeIntervalSinceReferenceDate / 9)
                 ZStack {
                     colors.primary.color
                     Ellipse().fill(colors.secondary.color)
@@ -20,7 +22,7 @@ struct ImmersiveArtworkBackground: View {
                         .offset(x: drift * 100, y: -geometry.size.height * 0.22)
                     Ellipse().fill(colors.primary.color.opacity(0.7))
                         .offset(x: -drift * 120, y: geometry.size.height * 0.35)
-                }.blur(radius: reduceTransparency ? 0 : 85)
+                }.blur(radius: reduceTransparency ? 0 : blur)
                     .overlay(Color.black.opacity(0.48))
                     .overlay(LinearGradient(colors: [.clear, .black.opacity(0.4)], startPoint: .top, endPoint: .bottom))
             }
