@@ -12,6 +12,7 @@ struct LyricsView: View {
     @State private var parsed = LyricsParser.parse("")
     @State private var editing = false
     @State private var timing = false
+    @State private var options = false
     @State private var attaching = false
     @State private var error: String?
     private var active: Int? { parsed.activeIndex(at: player.position) }
@@ -68,13 +69,15 @@ struct LyricsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Synchronize or adjust timing", systemImage: "metronome") { timing = true }
-                        Button("Edit or paste lyrics", systemImage: "pencil") { editing = true }
-                        Button("Attach LRC or text file", systemImage: "doc") { attaching = true }
-                        Toggle("Follow automatically", isOn: $autoFollow)
-                    } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Lyric options").disabled(player.currentSong == nil)
+                    Button { options = true } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                        .accessibilityLabel("Lyric options").accessibilityIdentifier("lyrics.options").disabled(player.currentSong == nil)
                 }
+            }
+            .confirmationDialog("Lyrics", isPresented: $options, titleVisibility: .hidden) {
+                Button("Synchronize or adjust timing", systemImage: "metronome") { timing = true }
+                Button("Edit or paste lyrics", systemImage: "pencil") { editing = true }
+                Button("Attach LRC or text file", systemImage: "doc") { attaching = true }
+                Button(autoFollow ? "Turn off automatic following" : "Follow automatically") { autoFollow.toggle() }
             }
             .task(id: "\(player.currentSong?.id ?? "")|\(library.revision)") { await loadLyrics() }
             .sheet(isPresented: $timing) { if let song = player.currentSong { LyricTimingView(song: song, raw: raw) } }

@@ -26,6 +26,7 @@ __pycache__/
 *.flac
 !LocalTunesTests/Fixtures/tone1.flac
 !LocalTunesTests/Fixtures/tone2.flac
+!LocalTunesTests/Fixtures/tone_loop.flac
 *.caf
 *.mp4
 *.au

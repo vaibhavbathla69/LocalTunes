@@ -6,9 +6,9 @@ from mutagen.flac import FLAC
 
 folder = Path(__file__).resolve().parent.parent / "LocalTunesTests" / "Fixtures"
 folder.mkdir(exist_ok=True)
-for index, amplitude in enumerate([0.25, 0.6], 1):
-    target = folder / f"tone{index}.flac"
-    samples = [amplitude * math.sin(2 * math.pi * (220 + index * 110) * n / 44100) for n in range(4 * 44100)]
+for index, amplitude, duration, filename in [(1, 0.25, 4, "tone1"), (2, 0.6, 4, "tone2"), (1, 0.25, 12, "tone_loop")]:
+    target = folder / f"{filename}.flac"
+    samples = [amplitude * math.sin(2 * math.pi * (220 + index * 110) * n / 44100) for n in range(duration * 44100)]
     sf.write(target, samples, 44100, format="FLAC", subtype="PCM_16")
     tags = FLAC(target)
     for key, value in {"TITLE": f"FLAC tone {index}", "ARTIST": "Synthetic Artist", "ALBUM": "FLAC Album",

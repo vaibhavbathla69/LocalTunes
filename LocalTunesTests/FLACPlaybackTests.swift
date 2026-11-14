@@ -4,11 +4,11 @@ import AVFoundation
 @testable import LocalTunes
 
 final class FLACPlaybackTests: XCTestCase {
-    private func fixture() async throws -> (URL, LibraryPaths, LibraryDatabase, [Song]) {
+    private func fixture(loop: Bool = false) async throws -> (URL, LibraryPaths, LibraryDatabase, [Song]) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let paths = try LibraryPaths(documents: root.appendingPathComponent("Documents"))
         let db = try LibraryDatabase(url: paths.database)
-        let urls = try (1...2).map { index in try XCTUnwrap(Bundle(for: Self.self).url(forResource: "tone\(index)", withExtension: "flac")) }
+        let urls = try (1...2).map { index in try XCTUnwrap(Bundle(for: Self.self).url(forResource: loop && index == 1 ? "tone_loop" : "tone\(index)", withExtension: "flac")) }
         await ImportService(db: db, paths: paths).run(urls) { _ in }
         let songs = try await db.songs(sort: .albumTrack)
         XCTAssertEqual(songs.count, 2)
@@ -142,16 +142,18 @@ final class FLACPlaybackTests: XCTestCase {
     }
     @MainActor
     func testABRepeatKeepsPlayingTheSelectedSongAndClearsOnNext() async throws {
-        let (root, paths, db, songs) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let (root, paths, db, songs) = try await fixture(loop: true); defer { try? FileManager.default.removeItem(at: root) }
         let player = PlaybackService(db: db, paths: paths)
         await player.setCrossfade(0); await player.play(ids: songs.map(\.id))
         let start = await waitUntil { player.position > 0.4 }; XCTAssertTrue(start)
         player.markRepeatA()
-        let end = await waitUntil { player.position > 1.2 }; XCTAssertTrue(end)
-        player.markRepeatB(); XCTAssertNotNil(player.repeatB)
+        let a = try XCTUnwrap(player.repeatA)
+        let end = await waitUntil { player.position >= a + 0.6 }; XCTAssertTrue(end)
+        player.markRepeatB(); let b = try XCTUnwrap(player.repeatB)
         try await Task.sleep(nanoseconds: 4_000_000_000)
         XCTAssertEqual(player.currentSong?.id, songs[0].id)
-        XCTAssertLessThan(player.position, 2)
+        XCTAssertGreaterThanOrEqual(player.position, a - 0.1)
+        XCTAssertLessThan(player.position, b + 0.5)
         await player.next(); XCTAssertNil(player.repeatA); XCTAssertNil(player.repeatB)
         player.pause()
     }

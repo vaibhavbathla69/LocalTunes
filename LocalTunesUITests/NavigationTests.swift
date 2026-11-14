@@ -377,7 +377,9 @@ final class NavigationTests: XCTestCase {
         app.buttons["Done"].tap()
         if !app.buttons["nowPlaying.lyrics"].isHittable { app.swipeUp() }
         app.buttons["nowPlaying.lyrics"].tap()
-        app.buttons["Lyric options"].tap()
+        let lyricOptions = app.buttons["lyrics.options"]
+        XCTAssertTrue(lyricOptions.waitForExistence(timeout: 5))
+        lyricOptions.tap()
         app.buttons["Synchronize or adjust timing"].tap()
         XCTAssertTrue(app.navigationBars["Lyrics timing"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Save"].isEnabled)
