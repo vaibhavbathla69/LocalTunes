@@ -344,7 +344,9 @@ final class NavigationTests: XCTestCase {
         song.press(forDuration: 1)
         app.buttons["Audio details"].tap()
         XCTAssertTrue(app.navigationBars["Audio details"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["16-bit"].waitForExistence(timeout: 5))
+        let depth = app.descendants(matching: .any).matching(identifier: "audio.bitDepth").firstMatch
+        XCTAssertTrue(depth.waitForExistence(timeout: 5))
+        XCTAssertEqual(depth.value as? String, "16-bit")
         capture(app, name: "39-AudioDetails")
         app.buttons["Done"].tap()
     }

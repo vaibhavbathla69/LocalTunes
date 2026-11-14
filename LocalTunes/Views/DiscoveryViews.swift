@@ -172,9 +172,9 @@ struct ListeningStatsView: View {
             }
             if period == "This year" {
                 Section("Annual recap") {
-                    Text("\(report.plays) plays ? \(report.seconds.clock) listening")
+                    Text("\(report.plays) plays / \(report.seconds.clock) listening")
                     if let artist = report.artists.first { Text("Top artist: " + artist.title) }
-                    ShareLink(item: "My LocalTunes recap: \(report.plays) plays, \(report.seconds.clock) listening. Top artist: \(report.artists.first?.title ?? "?")") { Label("Share recap", systemImage: "square.and.arrow.up") }
+                    ShareLink(item: "My LocalTunes recap: \(report.plays) plays, \(report.seconds.clock) listening. Top artist: \(report.artists.first?.title ?? "Unknown")") { Label("Share recap", systemImage: "square.and.arrow.up") }
                 }
             }
             Section { Button("Clear listening stats", role: .destructive) { clearing = true } }

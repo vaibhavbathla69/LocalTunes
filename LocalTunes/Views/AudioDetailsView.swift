@@ -15,7 +15,13 @@ struct AudioDetailsView: View {
                 LabeledContent("Size", value: ByteCountFormatter.string(fromByteCount: song.byteCount, countStyle: .file))
                 LabeledContent("Average file bitrate", value: "\(Int(Double(song.byteCount) * 8 / max(1, song.duration) / 1000)) kbps")
                 if let rate { LabeledContent("Sample rate", value: String(format: "%.1f kHz", rate / 1000)) }
-                if let bits { LabeledContent("Bit depth", value: "\(bits)-bit") }
+                if let bits {
+                    LabeledContent("Bit depth", value: "\(bits)-bit")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Bit depth")
+                        .accessibilityValue("\(bits)-bit")
+                        .accessibilityIdentifier("audio.bitDepth")
+                }
                 if let channels { LabeledContent("Channels", value: String(channels)) }
                 if let error { Text(error).foregroundStyle(.secondary) }
             }
