@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var auditMessage: String?
     @State private var auditing = false
     @State private var resettingArtists = false
+    @State private var albumScan: Task<Void, Never>?
+    @State private var albumProgress: String?
     var body: some View {
         Form {
             Section {
@@ -42,6 +44,13 @@ struct SettingsView: View {
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
             Section("Library care") {
+                if let albumProgress {
+                    HStack { ProgressView(); Text(albumProgress); Button("Cancel") { albumScan?.cancel() } }
+                } else {
+                    Button("Read missing album artists", systemImage: "person.crop.square") {
+                        albumScan = Task { await scanAlbumArtists() }
+                    }.disabled(library.isImporting)
+                }
                 NavigationLink { MissingArtworkView() } label: { Label("Albums missing artwork", systemImage: "photo") }
                 if let progress = library.artistScanProgress {
                     HStack { ProgressView(); Text("Artist credits \(progress)"); Spacer(); Button("Cancel") { library.cancelArtistScan() } }
@@ -89,7 +98,33 @@ struct SettingsView: View {
                 } }
             } message: { Text("Restores artist groupings from the original credits. Songs and listening history stay unchanged.") }
             .task { await library.refresh() }
+            .onDisappear { albumScan?.cancel() }
             .alert("Index backup ready", isPresented: $backupReady) { Button("OK") { } } message: { Text("Copy LibraryIndex-backup.sqlite, Music, Artwork and Lyrics using Files or Apple Devices. Keep your original music files too.") }
             .alert("Library check", isPresented: Binding(get: { auditMessage != nil }, set: { if !$0 { auditMessage = nil } })) { Button("OK") { auditMessage = nil } } message: { Text(auditMessage ?? "") }
     }
+    private func scanAlbumArtists() async {
+        albumProgress = "Reading album tags"
+        defer { albumProgress = nil; albumScan = nil }
+        do {
+            let ids = try await library.db.allIDs()
+            for (index, id) in ids.enumerated() {
+                try Task.checkCancellation()
+                albumProgress = "Album tags \(index + 1)/\(ids.count)"
+                guard let song = try await library.db.song(id), song.albumArtist == nil else { continue }
+                let url = library.paths.audioURL(for: song)
+                if url.pathExtension.lowercased() == "flac" {
+                    let tags = try await Task.detached { try FLACMetadata.read(url, includeArtwork: false) }.value
+                    if let tags, tags["ALBUM"] == song.album, let artist = tags["ALBUMARTIST"] ?? tags["ALBUM_ARTIST"] {
+                        try await library.db.fillAlbumArtist(song, artist: artist)
+                    }
+                } else {
+                    let metadata = try await MetadataExtractor.extract(url, originalName: song.originalFilename)
+                    if metadata.album == song.album, let artist = metadata.albumArtist { try await library.db.fillAlbumArtist(song, artist: artist) }
+                }
+            }
+        } catch is CancellationError { }
+        catch { library.errorMessage = error.localizedDescription }
+        library.revision += 1
+    }
+
 }

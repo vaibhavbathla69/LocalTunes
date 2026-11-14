@@ -516,6 +516,13 @@ actor LibraryDatabase {
         return albums
     }
 
+    func fillAlbumArtist(_ snapshot: Song, artist: String) throws {
+        guard var current = try song(snapshot.id), current.albumArtist == nil, current.album == snapshot.album,
+              !artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        current.albumArtist = artist
+        try save(current)
+    }
+
     func albumsMissingArtwork() throws -> [GroupSummary] {
         let all = try groups(.album)
         return try all.filter { album in

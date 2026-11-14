@@ -25,7 +25,7 @@ struct HomeView: View {
                     Button("Choose a folder", systemImage: "folder.badge.plus") { library.importFolder = true }
                 }.listRowBackground(Color.clear)
             }
-        }.listStyle(.insetGrouped).scrollContentBackground(.hidden)
+        }.listStyle(.plain).scrollContentBackground(.hidden)
             .background(Palette.background)
             .navigationTitle("Listen Now").navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.regularMaterial, for: .navigationBar)
@@ -52,12 +52,12 @@ struct HomeView: View {
         switch section {
         case .recentlyPlayedAlbums:
             if !feed.recentAlbums.isEmpty {
-                Section { HomeAlbumShelf(albums: feed.recentAlbums, popular: false) } header: { heading(section.title) }
+                Section { HomeAlbumShelf(albums: feed.recentAlbums, popular: false).listRowInsets(EdgeInsets()) } header: { heading(section.title) }
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
         case .mostPlayedAlbums:
             if !feed.popularAlbums.isEmpty {
-                Section { HomeAlbumShelf(albums: feed.popularAlbums, popular: true) } header: { heading(section.title) }
+                Section { HomeAlbumShelf(albums: feed.popularAlbums, popular: true).listRowInsets(EdgeInsets()) } header: { heading(section.title) }
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
         case .mostPlayedSongs:
@@ -127,6 +127,6 @@ private struct HomeAlbumShelf: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("home.\(popular ? "popular" : "recent").album.\(album.name)")
                 }
             }
-        }.scrollClipDisabled().frame(height: coverSize + 82)
+        }.contentMargins(.horizontal, 20, for: .scrollContent).scrollClipDisabled().frame(height: coverSize + 82)
     }
 }

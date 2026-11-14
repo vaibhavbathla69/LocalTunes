@@ -149,6 +149,7 @@ struct QueueView: View {
     @EnvironmentObject private var library: LibraryModel
     @State private var saving = false
     @State private var queueName = ""
+    @State private var nextSong: Song?
     @EnvironmentObject private var player: PlaybackService
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -156,6 +157,9 @@ struct QueueView: View {
             List {
                 if let song = player.currentSong {
                     Section("Now playing") { Text(song.title).font(.headline); Text(song.artist).foregroundStyle(.secondary) }
+                }
+                if let nextSong {
+                    Section("Playing next") { Text(nextSong.title).font(.headline); Text(nextSong.artist).foregroundStyle(.secondary) }
                 }
                 Button("Save as playlist", systemImage: "square.and.arrow.down") { saving = true }.disabled(player.queue.entries.isEmpty)
                 Section {
@@ -177,6 +181,13 @@ struct QueueView: View {
                         await library.savePlaylists(library.playlists + [Playlist(name: name, songIDs: player.queue.entries.map(\.songID))])
                     } }
                     Button("Cancel", role: .cancel) { }
+                }
+                .task(id: player.queue.following(automatic: true)?.id) {
+                    nextSong = nil
+                    if let next = player.queue.following(automatic: true) {
+                        do { nextSong = try await library.db.song(next.songID) }
+                        catch { library.errorMessage = error.localizedDescription }
+                    }
                 }
                 .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("Queue empty", systemImage: "list.bullet") } }
