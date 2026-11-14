@@ -11,7 +11,10 @@ struct LyricTimingView: View {
     @State private var offset = 0.0
     @State private var error: String?
     @State private var saving = false
-    private var lines: [String] { text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } }
+    private var lines: [String] {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !times.isEmpty else { return [] }
+        return text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: .newlines)
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -19,7 +22,7 @@ struct LyricTimingView: View {
                     TextEditor(text: Binding(get: { text }, set: { text = $0; times = []; offset = 0 })).frame(minHeight: 180)
                 }
                 Section("Tap along") {
-                    Text(times.count < lines.count ? lines[times.count] : "Every line is timed").font(.title3.bold())
+                    Text(times.count < lines.count ? (lines[times.count].isEmpty ? "Instrumental" : lines[times.count]) : "Every line is timed").font(.title3.bold())
                     HStack {
                         Button(player.currentSong?.id == song.id && player.isPlaying ? "Pause" : "Play") { Task {
                             if player.currentSong?.id == song.id { await player.toggle() }
@@ -35,7 +38,7 @@ struct LyricTimingView: View {
                     Stepper(String(format: "Shift all lines: %+.2f seconds", offset), value: $offset, in: -30...30, step: 0.1)
                     Text("Positive values show lyrics later. Negative values show them earlier.").font(.footnote).foregroundStyle(.secondary)
                     ForEach(Array(zip(lines, times).enumerated()), id: \.offset) { item in
-                        HStack { Text(max(0, item.element.1 + offset).clock).monospacedDigit(); Text(item.element.0).lineLimit(2) }
+                        HStack { Text(max(0, item.element.1 + offset).clock).monospacedDigit(); Text(item.element.0.isEmpty ? "Instrumental" : item.element.0).lineLimit(2) }
                     }
                 }
                 if let error { Text(error).foregroundStyle(.red) }
@@ -47,7 +50,7 @@ struct LyricTimingView: View {
                 .onAppear {
                     let parsed = LyricsParser.parse(raw)
                     if parsed.isSynchronized {
-                        let entries = parsed.lines.flatMap { line in line.text.components(separatedBy: .newlines).filter { !$0.isEmpty }.map { ($0, line.time) } }
+                        let entries = parsed.lines.flatMap { line in line.text.components(separatedBy: .newlines).map { ($0, line.time) } }
                         text = entries.map { $0.0 }.joined(separator: "\n"); times = entries.map { $0.1 }
                     }
                     else { text = raw }
