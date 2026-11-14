@@ -58,30 +58,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/test_scope.py >> "$GITHUB_OUTPUT"
-      - name: Test FLAC playback
-        if: steps.scope.outputs.audio == 'true'
-        run: |
-          set -euo pipefail
-          DEVICE_ID=$(python3 scripts/simulator.py)
-          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -only-testing:LocalTunesTests/FLACPlaybackTests \
-            -parallel-testing-enabled NO \
-            -derivedDataPath build/TestData -resultBundlePath build/FLACTests.xcresult \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee flac-test.log
       - name: Test library and interface
         env:
           AUDIO_CHECKS: ${{ steps.scope.outputs.audio }}
         run: |
           set -euo pipefail
           DEVICE_ID=$(python3 scripts/simulator.py)
-          CHECKS=(-skip-testing:LocalTunesTests/FLACPlaybackTests)
+          CHECKS=(-parallel-testing-enabled NO)
           if [ "$AUDIO_CHECKS" = "false" ]; then
-            CHECKS+=(-only-testing:LocalTunesTests -only-testing:LocalTunesUITests/NavigationTests/testEditorialDesignInLightAndDarkAppearance -only-testing:LocalTunesUITests/NavigationTests/testEmptyLibraryNavigationAndPlaylistCreation)
+            CHECKS+=(-skip-testing:LocalTunesTests/FLACPlaybackTests -only-testing:LocalTunesTests -only-testing:LocalTunesUITests/NavigationTests/testEditorialDesignInLightAndDarkAppearance -only-testing:LocalTunesUITests/NavigationTests/testEmptyLibraryNavigationAndPlaylistCreation)
           fi
           xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes "${CHECKS[@]}" \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -parallel-testing-enabled NO \
             -derivedDataPath build/TestData -resultBundlePath build/Tests.xcresult \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
       - name: Export UI screenshots

@@ -121,6 +121,7 @@ struct SettingsView: View {
                     let metadata = try await MetadataExtractor.extract(url, originalName: song.originalFilename)
                     if metadata.album == song.album, let artist = metadata.albumArtist { try await library.db.fillAlbumArtist(song, artist: artist) }
                 }
+                if let refreshed = try await library.db.song(id) { library.player.refreshSong(refreshed) }
             }
         } catch is CancellationError { }
         catch { library.errorMessage = error.localizedDescription }

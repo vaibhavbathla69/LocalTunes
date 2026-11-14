@@ -210,6 +210,7 @@ final class PlaybackService: ObservableObject {
     func cycleRepeat() async { synchronizeCurrentItem(); queue.position = position; queue.repeatMode = queue.repeatMode.next; saveQueue(); await replaceUpcoming() }
 
     func refreshSong(_ song: Song) {
+        if preparedFade?.song.id == song.id { preparedFade?.song = song }
         if currentSong?.id == song.id { currentSong = song; updateNowPlaying() }
         for key in Array(itemSongs.keys) where itemSongs[key]?.id == song.id { itemSongs[key] = song }
     }
