@@ -2,6 +2,12 @@
 
 A native, personal, offline iPhone music player. SwiftUI, AVFoundation, MediaPlayer and SQLite; iOS 17 or later. No runtime servers, analytics, streaming subscriptions, online lyrics services or Apple Music permissions. Bring your own unprotected audio files.
 
+### Version 1.6: library tools and edge-to-edge shelves
+
+Storage review verifies complete source and managed-file hashes before offering cleanup of Import audio originals, then rechecks inside file coordination. Music and LibraryData are never cleanup targets. Search folds accents/width/case, ranks title matches before metadata matches, and offers bounded typo suggestions when there are no results. Album groups use album title, album artist (primary credited artist fallback), and release year; existing title-based links remain readable. Album-wide artwork changes commit together and missing covers can be browsed in Settings. Audio details distinguish source rate/depth/average file bitrate from the active output route's sample rate. Queue adds return stable entry IDs for undo; queues can be saved as playlists. Daily listening starts with this update and adds seven-day/month/year views, a streak and a shareable annual summary; earlier totals remain in All time. Horizontal album shelves draw beyond the content insets.
+
+The IPA now uploads before simulator tests finish and is a candidate until the workflow passes. Pure visual changes on top of a verified parent run unit tests and two appearance/navigation UI checks; core, unknown or test changes run the full audio and UI suite. No checks are skipped for this release's core changes.
+
 ### Version 1.5: editorial design
 
 System light/dark appearance, white/OLED-black surfaces, crimson controls, native material navigation and player dock, and five tabs including a local Browse page. Browse features large album cards and the library grid. Listen Now retains the user's history, popularity, stats and recent-import sections. Now Playing adds slowly moving cover-derived color fields, a system volume slider and a stronger play/pause artwork transition. Lyrics expand full-screen with an emphasized active line. Reduce Motion pauses background movement; materials respect system transparency preferences. Lossless badges identify supported lossless source-file extensions, not output quality or Dolby Atmos support.

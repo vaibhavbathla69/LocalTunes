@@ -25,6 +25,7 @@ struct SettingsView: View {
                 NavigationLink { ListeningStatsView() } label: { Label("Listening stats", systemImage: "chart.bar") }.accessibilityIdentifier("settings.stats")
             }
             Section("On this iPhone") {
+                NavigationLink { StorageView() } label: { Label("Storage and import cleanup", systemImage: "internaldrive") }
                 LabeledContent("Songs", value: "\(library.songCount)")
                 LabeledContent("Indexed audio", value: ByteCountFormatter.string(fromByteCount: library.musicBytes, countStyle: .file))
                 LabeledContent("Available storage", value: ByteCountFormatter.string(fromByteCount: library.availableBytes, countStyle: .file))
@@ -41,6 +42,7 @@ struct SettingsView: View {
                 Text("LRC sidecars match by filename, title, or Artist - Title. Ambiguous matches need manual attachment. In Now Playing, open Lyrics to attach or edit text.").font(.footnote).foregroundStyle(.secondary)
             }
             Section("Library care") {
+                NavigationLink { MissingArtworkView() } label: { Label("Albums missing artwork", systemImage: "photo") }
                 if let progress = library.artistScanProgress {
                     HStack { ProgressView(); Text("Artist credits \(progress)"); Spacer(); Button("Cancel") { library.cancelArtistScan() } }
                 }

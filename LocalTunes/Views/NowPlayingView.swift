@@ -23,7 +23,7 @@ struct NowPlayingView: View {
                 ScrollView {
                     if let song = player.currentSong {
                         VStack(spacing: 16) {
-                            Button { album = AlbumDestination(name: song.album) } label: {
+                            Button { album = AlbumDestination(name: AlbumIdentity.key(for: song)) } label: {
                                 HStack(spacing: 7) { Text(song.album).lineLimit(1); Image(systemName: "chevron.right").font(.caption2.bold()) }.font(.subheadline.weight(.semibold))
                                     .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                             }.buttonStyle(.plain).accessibilityLabel("Open album \(song.album)").accessibilityIdentifier("nowPlaying.album")
@@ -62,7 +62,7 @@ struct NowPlayingView: View {
             }
             .confirmationDialog("Now Playing", isPresented: $options, titleVisibility: .hidden) {
                         if let song = player.currentSong {
-                            Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: song.album) }
+                            Button("View album", systemImage: "square.stack.fill") { album = AlbumDestination(name: AlbumIdentity.key(for: song)) }
                             Button(song.isFavourite ? "Remove favourite" : "Add favourite", systemImage: "heart") { Task { await library.favourite(song) } }
                             Button("View artist", systemImage: "person.fill") {
                                 let names = ArtistCredits.names(artist: song.artist, title: song.title)
@@ -146,11 +146,18 @@ struct RoutePicker: UIViewRepresentable {
 }
 
 struct QueueView: View {
+    @EnvironmentObject private var library: LibraryModel
+    @State private var saving = false
+    @State private var queueName = ""
     @EnvironmentObject private var player: PlaybackService
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             List {
+                if let song = player.currentSong {
+                    Section("Now playing") { Text(song.title).font(.headline); Text(song.artist).foregroundStyle(.secondary) }
+                }
+                Button("Save as playlist", systemImage: "square.and.arrow.down") { saving = true }.disabled(player.queue.entries.isEmpty)
                 Section {
                     ForEach(player.queue.entries) { entry in QueueSongRow(entry: entry).listRowBackground(Color.white.opacity(0.05)).listRowSeparator(.hidden) }
                         .onDelete { offsets in
@@ -162,6 +169,15 @@ struct QueueView: View {
                     Text("\(player.queue.entries.count) tracks").accessibilityIdentifier("queue.count")
                 }
             }.scrollContentBackground(.hidden).background { ArtworkBackdrop(song: player.currentSong, strength: 0.45).ignoresSafeArea() }
+                .alert("Save queue", isPresented: $saving) {
+                    TextField("Name", text: $queueName)
+                    Button("Save") { Task {
+                        let name = queueName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !name.isEmpty else { return }
+                        await library.savePlaylists(library.playlists + [Playlist(name: name, songIDs: player.queue.entries.map(\.songID))])
+                    } }
+                    Button("Cancel", role: .cancel) { }
+                }
                 .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("Queue empty", systemImage: "list.bullet") } }
         }

@@ -19,6 +19,7 @@ struct Song: Identifiable, Codable, Hashable, Sendable {
     var discNumber: Int? = nil
     var year: Int? = nil
     var artistTagsVersion: Int? = nil
+    var albumArtist: String? = nil
 
     var effectiveTrackNumber: Int { trackNumber > 0 ? min(65535, trackNumber) : (AlbumPosition.filename(originalFilename).track ?? 0) }
     var effectiveDiscNumber: Int { min(65535, max(1, discNumber ?? AlbumPosition.filename(originalFilename).disc ?? 1)) }
@@ -82,12 +83,14 @@ struct PlaybackQueue: Codable, Equatable, Sendable {
         return repeatMode == .all ? entries.first : nil
     }
 
-    mutating func append(_ songID: String, next: Bool) {
+    @discardableResult
+    mutating func append(_ songID: String, next: Bool) -> String {
         let entry = QueueEntry(songID: songID)
         if next, let index = currentIndex { entries.insert(entry, at: index + 1) }
         else { entries.append(entry) }
         originalOrder.append(entry.id)
         if currentID == nil { currentID = entry.id }
+        return entry.id
     }
 
     mutating func toggleShuffle() {
@@ -129,7 +132,9 @@ enum LibraryGroup: String, CaseIterable, Sendable { case album, artist, genre }
 struct GroupSummary: Identifiable, Sendable {
     var name: String
     var count: Int
-    var id: String { name }
+    var key: String? = nil
+    var value: String { key ?? name }
+    var id: String { value }
 }
 
 struct AlbumSummary: Sendable {
@@ -142,7 +147,9 @@ struct AlbumSummary: Sendable {
 
 struct AlbumDestination: Identifiable {
     var name: String
-    var id: String { name }
+    var key: String? = nil
+    var value: String { key ?? name }
+    var id: String { value }
 }
 
 enum LibraryError: LocalizedError {

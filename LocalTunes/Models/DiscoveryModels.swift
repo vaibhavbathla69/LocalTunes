@@ -86,7 +86,9 @@ struct AlbumActivity: Identifiable, Sendable {
     var count: Int
     var plays: Int
     var representative: Song?
-    var id: String { name }
+    var key: String? = nil
+    var value: String { key ?? name }
+    var id: String { value }
 }
 
 struct HomeFeed: Sendable {

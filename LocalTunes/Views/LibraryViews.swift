@@ -125,7 +125,7 @@ struct GroupCard: View {
     @State private var representative: Song?
     var body: some View {
         NavigationLink {
-            if kind == .album { AlbumDetailView(albumName: group.name) }
+            if kind == .album { AlbumDetailView(albumName: group.value) }
             else if kind == .artist { ArtistDetailView(name: group.name) }
             else { SongListView(title: group.name, group: kind, groupValue: group.name) }
         } label: {
@@ -135,11 +135,15 @@ struct GroupCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: kind == .artist ? proxy.size.width / 2 : 12))
                 }.aspectRatio(1, contentMode: .fit)
                 Text(group.name).font(.subheadline.bold()).lineLimit(2)
+                if kind == .album, let song = representative {
+                    Text(Song.text(song.albumArtist, fallback: ArtistCredits.names(artist: song.artist, title: song.title).first ?? song.artist)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if let year = song.year { Text(String(year)).font(.caption2).foregroundStyle(.secondary) }
+                }
                 Text("\(group.count) \(group.count == 1 ? "song" : "songs")").font(.caption).foregroundStyle(Palette.muted)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.buttonStyle(.plain).accessibilityIdentifier("collection.\(kind.rawValue).\(group.name)")
             .task(id: "\(group.id)|\(library.revision)") {
-                do { representative = try await library.db.songs(group: kind, value: group.name, limit: 1).first } catch { library.errorMessage = error.localizedDescription }
+                do { representative = try await library.db.songs(group: kind, value: group.value, limit: 1).first } catch { library.errorMessage = error.localizedDescription }
             }
     }
 }
@@ -150,6 +154,7 @@ struct SearchView: View {
     @State private var scope = "Songs"
     @State private var filters = SearchFilters()
     @State private var filtering = false
+    @State private var suggestions: [String] = []
     var body: some View {
         VStack(spacing: 16) {
             HStack {
@@ -157,6 +162,13 @@ struct SearchView: View {
                 Button { filtering = true } label: { Image(systemName: filters.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill").font(.title2).frame(width: 44, height: 44) }
                     .accessibilityLabel("Search filters").accessibilityIdentifier("search.filters")
             }.padding(.horizontal, 20)
+            if !suggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack { ForEach(suggestions, id: \.self) { suggestion in
+                        Button("Try: " + suggestion) { text = suggestion }.buttonStyle(.bordered)
+                    } }.padding(.horizontal, 20)
+                }
+            }
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && filters.isEmpty {
                 List {
                     if !library.recentSearches.isEmpty {
@@ -180,6 +192,18 @@ struct SearchView: View {
             }
         }.padding(.top, 8).background(Palette.background).navigationTitle("Search").navigationBarTitleDisplayMode(.large)
             .toolbar { ImportMenu() }
+            .task(id: "\(text)|\(filters)|\(library.revision)") {
+                suggestions = []
+                do {
+                    try await Task.sleep(nanoseconds: 300_000_000)
+                    guard !text.isEmpty else { return }
+                    let matches = try await library.db.songs(search: text, limit: 1, searchFilters: filters)
+                    guard !Task.isCancelled, matches.isEmpty else { return }
+                    let proposed = try await library.db.searchSuggestions(text)
+                    guard !Task.isCancelled else { return }
+                    suggestions = proposed
+                } catch { }
+            }
             .sheet(isPresented: $filtering) { SearchFilterEditor(filters: $filters) }
             .onDisappear { Task { await library.rememberSearch(text) } }
     }

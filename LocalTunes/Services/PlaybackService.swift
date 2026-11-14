@@ -171,12 +171,14 @@ final class PlaybackService: ObservableObject {
         saveQueue(); await rebuild(autoplay: true)
     }
 
-    func append(_ id: String, next: Bool) async {
+    @discardableResult
+    func append(_ id: String, next: Bool) async -> String {
         synchronizeCurrentItem()
         let wasEmpty = queue.current == nil
         queue.position = position
-        queue.append(id, next: next); saveQueue()
+        let entryID = queue.append(id, next: next); saveQueue()
         if wasEmpty { await rebuild(autoplay: false) } else { await replaceUpcoming() }
+        return entryID
     }
 
     func jump(to entryID: String) async {

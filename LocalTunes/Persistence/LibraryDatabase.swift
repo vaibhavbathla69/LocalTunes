@@ -15,6 +15,11 @@ actor LibraryDatabase {
             throw LibraryError.message("Could not open library database. Your files have been preserved.")
         }
         connection = db
+        sqlite3_create_function_v2(db, "search_normalize", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil, { context, count, values in
+            guard let values, let value = sqlite3_value_text(values[0]) else { sqlite3_result_text(context, "", -1, nil); return }
+            let text = SearchText.normalize(String(cString: value))
+            sqlite3_result_text(context, text, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        }, nil, nil, nil)
         // Refuse unknown future schemas. Never delete a database to recover from a migration error.
         var statement: OpaquePointer?
         sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &statement, nil)
@@ -61,6 +66,11 @@ actor LibraryDatabase {
           song_id TEXT PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
           seconds REAL NOT NULL DEFAULT 0, plays INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS listening_daily (
+          song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+          day REAL NOT NULL, seconds REAL NOT NULL DEFAULT 0, plays INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(song_id,day)
+        );
         CREATE TABLE IF NOT EXISTS artists (key TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS artist_aliases (alias_key TEXT PRIMARY KEY, target_key TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS song_artists (
@@ -79,6 +89,7 @@ actor LibraryDatabase {
         do {
             if version == 1 { try Self.indexAlbumPositions(db) }
             try ArtistIndex.rebuildIfNeeded(db)
+            try Self.indexAlbumGroups(db)
             guard sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw LibraryError.message(String(cString: sqlite3_errmsg(db))) }
         } catch {
             sqlite3_exec(db, "ROLLBACK", nil, nil, nil); sqlite3_close(db); connection = nil
@@ -87,6 +98,26 @@ actor LibraryDatabase {
     }
 
     deinit { sqlite3_close(connection) }
+
+    private static func indexAlbumGroups(_ db: OpaquePointer) throws {
+        var check: OpaquePointer?
+        let exists = sqlite3_prepare_v2(db, "SELECT album_group FROM songs LIMIT 0", -1, &check, nil) == SQLITE_OK
+        sqlite3_finalize(check)
+        if !exists, sqlite3_exec(db, "ALTER TABLE songs ADD COLUMN album_group TEXT NOT NULL DEFAULT ''", nil, nil, nil) != SQLITE_OK { throw LibraryError.message("Could not add album groups") }
+        var read: OpaquePointer?, update: OpaquePointer?
+        defer { sqlite3_finalize(read); sqlite3_finalize(update) }
+        guard sqlite3_prepare_v2(db, "SELECT id,payload FROM songs", -1, &read, nil) == SQLITE_OK,
+              sqlite3_prepare_v2(db, "UPDATE songs SET album_group=? WHERE id=?", -1, &update, nil) == SQLITE_OK else { throw LibraryError.message("Could not prepare album grouping") }
+        while sqlite3_step(read) == SQLITE_ROW {
+            guard let blob = sqlite3_column_blob(read, 1) else { throw LibraryError.message("Missing album metadata") }
+            let song = try JSONDecoder().decode(Song.self, from: Data(bytes: blob, count: Int(sqlite3_column_bytes(read, 1))))
+            sqlite3_reset(update); sqlite3_clear_bindings(update)
+            sqlite3_bind_text(update, 1, AlbumIdentity.key(for: song), -1, transient)
+            sqlite3_bind_text(update, 2, song.id, -1, transient)
+            guard sqlite3_step(update) == SQLITE_DONE else { throw LibraryError.message("Could not update album grouping") }
+        }
+        guard sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS songs_album_group ON songs(album_group)", nil, nil, nil) == SQLITE_OK else { throw LibraryError.message("Could not index album groups") }
+    }
 
     private static func indexAlbumPositions(_ db: OpaquePointer) throws {
         var read: OpaquePointer?, update: OpaquePointer?
@@ -131,6 +162,7 @@ actor LibraryDatabase {
         if ownsTransaction { try execute("BEGIN IMMEDIATE") }
         do {
             try saveRow(song)
+            try execute("UPDATE songs SET album_group=? WHERE id=?", [AlbumIdentity.key(for: song), song.id])
             try ArtistIndex.update(connection, song: song)
             if ownsTransaction { try execute("COMMIT") }
         } catch {
@@ -184,9 +216,10 @@ actor LibraryDatabase {
                group: LibraryGroup? = nil, value: String? = nil, limit: Int = 150, offset: Int = 0,
                searchFilters: SearchFilters = SearchFilters(), smart: SmartCollection? = nil) throws -> [Song] {
         let filter = try filters(search: search, favourite: favourite, group: group, value: value, extra: searchFilters, smart: smart)
-        let order = ordering(sort, group: group)
+        let ranked = searchOrdering(search, sort: sort, group: group)
+        let order = ranked.0
         let sql = "SELECT payload FROM songs WHERE \(filter.0) ORDER BY \(order) LIMIT ? OFFSET ?"
-        let statement = try prepare(sql, filter.1 + [String(limit), String(offset)])
+        let statement = try prepare(sql, filter.1 + ranked.1 + [String(limit), String(offset)])
         defer { sqlite3_finalize(statement) }
         var result: [Song] = []
         while true {
@@ -196,6 +229,29 @@ actor LibraryDatabase {
             result.append(try decodeSong(statement))
         }
         return result
+    }
+
+    private func searchOrdering(_ search: String, sort: LibrarySort, group: LibraryGroup?) -> (String, [String]) {
+        let normalized = SearchText.normalize(search)
+        let base = ordering(sort, group: group)
+        guard !normalized.isEmpty, sort == .title, group == nil else { return (base, []) }
+        let escaped = normalized.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
+        return ("CASE WHEN search_normalize(title)=? THEN 0 WHEN search_normalize(title) LIKE ? ESCAPE '\\' THEN 1 WHEN search_normalize(title) LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END," + base, [normalized, escaped + "%", "%" + escaped + "%"])
+    }
+
+    func searchSuggestions(_ query: String) throws -> [String] {
+        let normalized = SearchText.normalize(query)
+        guard normalized.count >= 3, normalized.count <= 64 else { return [] }
+        let statement = try prepare("SELECT DISTINCT title FROM songs ORDER BY title COLLATE NOCASE LIMIT 10000")
+        defer { sqlite3_finalize(statement) }
+        var candidates: [(String, Int)] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            let title = String(cString: sqlite3_column_text(statement, 0))
+            let name = SearchText.normalize(title)
+            let score = normalized.contains(" ") ? SearchText.distance(normalized, name) : name.split(separator: " ").map { SearchText.distance(normalized, String($0)) }.min() ?? 99
+            if score > 0, score <= (normalized.count > 5 ? 2 : 1) { candidates.append((title, score)) }
+        }
+        return candidates.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }.prefix(3).map { $0.0 }
     }
 
     private func ordering(_ sort: LibrarySort, group: LibraryGroup?) -> String {
@@ -211,7 +267,7 @@ actor LibraryDatabase {
     }
 
     func albumSummary(_ name: String) throws -> AlbumSummary {
-        let statement = try prepare("SELECT COUNT(*),COALESCE(SUM(duration_seconds),0),COUNT(DISTINCT artist),MIN(artist),COALESCE(MAX(album_order IS NOT NULL),0),COALESCE(MAX(disc_number),1) FROM songs WHERE album=?", [name])
+        let statement = try prepare("SELECT COUNT(*),COALESCE(SUM(duration_seconds),0),COUNT(DISTINCT artist),MIN(artist),COALESCE(MAX(album_order IS NOT NULL),0),COALESCE(MAX(disc_number),1) FROM songs WHERE \(AlbumIdentity.column(name))=?", [name])
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_ROW else { throw error() }
         let artist = try albumArtist(name)
@@ -221,7 +277,7 @@ actor LibraryDatabase {
     }
 
     private func albumArtist(_ album: String) throws -> String {
-        let s = try prepare("SELECT DISTINCT artist FROM songs WHERE album=?", [album]); defer { sqlite3_finalize(s) }
+        let s = try prepare("SELECT DISTINCT artist FROM songs WHERE \(AlbumIdentity.column(album))=?", [album]); defer { sqlite3_finalize(s) }
         var keys: Set<String> = [], display = "Unknown artist"
         while true {
             let code = sqlite3_step(s)
@@ -242,21 +298,21 @@ actor LibraryDatabase {
         }
         try execute("BEGIN IMMEDIATE")
         do {
-            try execute("UPDATE songs SET album_order=NULL WHERE album=?", [name])
-            for (index, id) in songIDs.enumerated() { try execute("UPDATE songs SET album_order=? WHERE id=? AND album=?", [String(index), id, name]) }
+            try execute("UPDATE songs SET album_order=NULL WHERE \(AlbumIdentity.column(name))=?", [name])
+            for (index, id) in songIDs.enumerated() { try execute("UPDATE songs SET album_order=? WHERE id=? AND \(AlbumIdentity.column(name))=?", [String(index), id, name]) }
             try execute("COMMIT")
         } catch { try? execute("ROLLBACK"); throw error }
     }
 
-    func resetAlbumOrder(_ name: String) throws { try execute("UPDATE songs SET album_order=NULL WHERE album=?", [name]) }
+    func resetAlbumOrder(_ name: String) throws { try execute("UPDATE songs SET album_order=NULL WHERE \(AlbumIdentity.column(name))=?", [name]) }
 
     private func filters(search: String, favourite: Bool, group: LibraryGroup?, value: String?, extra: SearchFilters = SearchFilters(), smart: SmartCollection? = nil) throws -> (String, [String]) {
         var clauses = ["1=1"]
         var args: [String] = []
         // Each word is required, but words may appear in any order or metadata
         // field. Keep this shared with allIDs so playback matches the results.
-        for term in search.split(whereSeparator: { $0.isWhitespace }) {
-            clauses.append("(title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\' OR album LIKE ? ESCAPE '\\' OR genre LIKE ? ESCAPE '\\' OR CAST(json_extract(CAST(payload AS TEXT),'$.year') AS TEXT) LIKE ? ESCAPE '\\')")
+        for term in SearchText.normalize(search).split(whereSeparator: { $0.isWhitespace }) {
+            clauses.append("(search_normalize(title) LIKE ? ESCAPE '\\' OR search_normalize(artist) LIKE ? ESCAPE '\\' OR search_normalize(album) LIKE ? ESCAPE '\\' OR search_normalize(genre) LIKE ? ESCAPE '\\' OR CAST(json_extract(CAST(payload AS TEXT),'$.year') AS TEXT) LIKE ? ESCAPE '\\')")
             let escaped = String(term).replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
             args += Array(repeating: "%\(escaped)%", count: 5)
         }
@@ -265,14 +321,14 @@ actor LibraryDatabase {
             if group == .artist {
                 clauses.append("EXISTS(SELECT 1 FROM song_artists WHERE song_id=songs.id AND artist_key=?)")
                 args.append(try ArtistIndex.resolve(connection, value))
-            } else { clauses.append("\(group.rawValue)=?"); args.append(value) }
+            } else { clauses.append("\(group == .album ? AlbumIdentity.column(value) : group.rawValue)=?"); args.append(value) }
         }
         if !extra.artist.isEmpty {
             clauses.append("EXISTS(SELECT 1 FROM song_artists WHERE song_id=songs.id AND artist_key=?)")
             args.append(try ArtistIndex.resolve(connection, extra.artist))
         }
         for (column, text) in [("album", extra.album), ("genre", extra.genre)] where !text.isEmpty {
-            clauses.append("\(column)=? COLLATE NOCASE"); args.append(text)
+            clauses.append("\(column == "album" ? AlbumIdentity.column(text) : column)=? COLLATE NOCASE"); args.append(text)
         }
         if let year = extra.year { clauses.append("json_extract(CAST(payload AS TEXT),'$.year')=CAST(? AS INTEGER)"); args.append(String(year)) }
         if let smart {
@@ -290,8 +346,9 @@ actor LibraryDatabase {
     func allIDs(search: String = "", favourite: Bool = false, group: LibraryGroup? = nil, value: String? = nil, sort: LibrarySort = .title,
                 searchFilters: SearchFilters = SearchFilters(), smart: SmartCollection? = nil) throws -> [String] {
         let filter = try filters(search: search, favourite: favourite, group: group, value: value, extra: searchFilters, smart: smart)
-        let order = ordering(sort, group: group)
-        let statement = try prepare("SELECT id FROM songs WHERE \(filter.0) ORDER BY \(order)", filter.1)
+        let ranked = searchOrdering(search, sort: sort, group: group)
+        let order = ranked.0
+        let statement = try prepare("SELECT id FROM songs WHERE \(filter.0) ORDER BY \(order)", filter.1 + ranked.1)
         defer { sqlite3_finalize(statement) }
         var ids: [String] = []
         while true {
@@ -308,7 +365,7 @@ actor LibraryDatabase {
         let terms = search.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         let sql = kind == .artist
             ? "SELECT artists.name,COUNT(DISTINCT songs.id) FROM songs JOIN song_artists ON songs.id=song_artists.song_id JOIN artists ON artists.key=song_artists.artist_key WHERE \(filter.0) GROUP BY artists.key ORDER BY artists.name COLLATE NOCASE"
-            : "SELECT \(kind.rawValue),COUNT(*) FROM songs WHERE \(filter.0) GROUP BY \(kind.rawValue) ORDER BY \(kind.rawValue) COLLATE NOCASE"
+            : "SELECT \(kind.rawValue),COUNT(*),\(kind == .album ? "album_group" : kind.rawValue) FROM songs WHERE \(filter.0) GROUP BY \(kind == .album ? "album_group" : kind.rawValue) ORDER BY \(kind.rawValue) COLLATE NOCASE"
         let statement = try prepare(sql, filter.1)
         defer { sqlite3_finalize(statement) }
         var result: [GroupSummary] = []
@@ -318,7 +375,7 @@ actor LibraryDatabase {
             guard code == SQLITE_ROW else { throw error() }
             let name = String(cString: sqlite3_column_text(statement, 0))
             if terms.allSatisfy({ name.localizedStandardContains($0) }) {
-                result.append(GroupSummary(name: name, count: Int(sqlite3_column_int(statement, 1))))
+                result.append(GroupSummary(name: name, count: Int(sqlite3_column_int(statement, 1)), key: kind == .album ? String(cString: sqlite3_column_text(statement, 2)) : nil))
             }
         }
         return result
@@ -367,7 +424,13 @@ actor LibraryDatabase {
 
     func recordListening(_ id: String, seconds: Double, plays: Int) throws {
         guard seconds.isFinite, seconds >= 0, plays >= 0, try song(id) != nil else { return }
-        try execute("INSERT INTO listening(song_id,seconds,plays) VALUES(?,?,?) ON CONFLICT(song_id) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(seconds), String(plays)])
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("INSERT INTO listening(song_id,seconds,plays) VALUES(?,?,?) ON CONFLICT(song_id) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(seconds), String(plays)])
+            let day = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+            try execute("INSERT INTO listening_daily(song_id,day,seconds,plays) VALUES(?,?,?,?) ON CONFLICT(song_id,day) DO UPDATE SET seconds=seconds+excluded.seconds,plays=plays+excluded.plays", [id, String(day), String(seconds), String(plays)])
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
     }
 
     func fillMissingYear(_ id: String, year: Int) throws -> Song? {
@@ -391,8 +454,10 @@ actor LibraryDatabase {
         return current
     }
 
-    func listeningReport() throws -> ListeningReport {
-        let totals = try prepare("SELECT COALESCE(SUM(seconds),0),COALESCE(SUM(plays),0) FROM listening")
+    func listeningReport(since: Date? = nil) throws -> ListeningReport {
+        let prefix = since == nil ? "" : "WITH listening AS (SELECT song_id,SUM(seconds) AS seconds,SUM(plays) AS plays FROM listening_daily WHERE day>=? GROUP BY song_id) "
+        let args = since.map { [String($0.timeIntervalSince1970)] } ?? []
+        let totals = try prepare(prefix + "SELECT COALESCE(SUM(seconds),0),COALESCE(SUM(plays),0) FROM listening", args)
         defer { sqlite3_finalize(totals) }
         guard sqlite3_step(totals) == SQLITE_ROW else { throw error() }
         var report = ListeningReport(seconds: sqlite3_column_double(totals, 0), plays: Int(sqlite3_column_int(totals, 1)))
@@ -400,7 +465,7 @@ actor LibraryDatabase {
             let sql = artist
                 ? "SELECT artists.name,artists.name,SUM(listening.seconds),SUM(listening.plays) FROM songs JOIN listening ON songs.id=listening.song_id JOIN song_artists ON song_artists.song_id=songs.id JOIN artists ON artists.key=song_artists.artist_key GROUP BY artists.key HAVING SUM(listening.seconds)>0 ORDER BY SUM(listening.seconds) DESC,artists.name LIMIT 20"
                 : "SELECT songs.id,songs.title,listening.seconds,listening.plays FROM songs JOIN listening ON songs.id=listening.song_id WHERE listening.seconds>0 ORDER BY listening.seconds DESC,songs.title LIMIT 20"
-            let stmt = try prepare(sql)
+            let stmt = try prepare(prefix + sql, args)
             defer { sqlite3_finalize(stmt) }
             var leaders: [ListeningLeader] = []
             while true {
@@ -414,7 +479,18 @@ actor LibraryDatabase {
         return report
     }
 
-    func clearListening() throws { try execute("DELETE FROM listening") }
+    func listeningDays() throws -> [Date] {
+        let stmt = try prepare("SELECT day FROM listening_daily GROUP BY day HAVING SUM(seconds)>0 ORDER BY day DESC")
+        defer { sqlite3_finalize(stmt) }
+        var days: [Date] = []
+        while sqlite3_step(stmt) == SQLITE_ROW { days.append(Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))) }
+        return days
+    }
+    func clearListening() throws {
+        try execute("BEGIN IMMEDIATE")
+        do { try execute("DELETE FROM listening"); try execute("DELETE FROM listening_daily"); try execute("COMMIT") }
+        catch { try? execute("ROLLBACK"); throw error }
+    }
 
     func homeFeed() throws -> HomeFeed {
         HomeFeed(recentAlbums: try albumActivity(mostPlayed: false), popularAlbums: try albumActivity(mostPlayed: true),
@@ -425,7 +501,7 @@ actor LibraryDatabase {
     private func albumActivity(mostPlayed: Bool) throws -> [AlbumActivity] {
         let having = mostPlayed ? "COALESCE(SUM(listening.plays),0)>0" : "MAX(songs.played) IS NOT NULL"
         let order = mostPlayed ? "SUM(listening.plays) DESC,SUM(listening.seconds) DESC" : "MAX(songs.played) DESC"
-        let s = try prepare("SELECT songs.album,COUNT(*),COALESCE(SUM(listening.plays),0) FROM songs LEFT JOIN listening ON listening.song_id=songs.id GROUP BY songs.album HAVING \(having) ORDER BY \(order),songs.album COLLATE NOCASE LIMIT 12")
+        let s = try prepare("SELECT songs.album,COUNT(*),COALESCE(SUM(listening.plays),0),songs.album_group FROM songs LEFT JOIN listening ON listening.song_id=songs.id GROUP BY songs.album_group HAVING \(having) ORDER BY \(order),songs.album COLLATE NOCASE LIMIT 12")
         defer { sqlite3_finalize(s) }
         var albums: [AlbumActivity] = []
         while true {
@@ -433,10 +509,31 @@ actor LibraryDatabase {
             if code == SQLITE_DONE { break }
             guard code == SQLITE_ROW else { throw error() }
             let name = String(cString: sqlite3_column_text(s, 0))
-            let cover = try songs(sort: .albumTrack, group: .album, value: name, limit: 1).first
-            albums.append(AlbumActivity(name: name, count: Int(sqlite3_column_int(s, 1)), plays: Int(sqlite3_column_int(s, 2)), representative: cover))
+            let key = String(cString: sqlite3_column_text(s, 3))
+            let cover = try songs(sort: .albumTrack, group: .album, value: key, limit: 1).first
+            albums.append(AlbumActivity(name: name, count: Int(sqlite3_column_int(s, 1)), plays: Int(sqlite3_column_int(s, 2)), representative: cover, key: key))
         }
         return albums
+    }
+
+    func albumsMissingArtwork() throws -> [GroupSummary] {
+        let all = try groups(.album)
+        return try all.filter { album in
+            try songs(group: .album, value: album.value, limit: -1).contains { $0.artworkPath == nil }
+        }
+    }
+
+    func setAlbumArtwork(_ album: String, paths: [String: String]) throws -> [Song] {
+        guard Set(try allIDs(group: .album, value: album)) == Set(paths.keys) else { throw LibraryError.message("The album changed. Please try again.") }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            var updated: [Song] = []
+            for (id, path) in paths {
+                guard var song = try song(id) else { throw LibraryError.message("A song was removed") }
+                song.artworkPath = path; try save(song); updated.append(song)
+            }
+            try execute("COMMIT"); return updated
+        } catch { try? execute("ROLLBACK"); throw error }
     }
 
     func mergeArtist(_ source: String, into target: String) throws {

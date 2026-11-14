@@ -68,6 +68,8 @@ struct SongRow: View {
     @State private var choosingPlaylist = false
     @State private var editing = false
     @State private var queued = false
+    @State private var details = false
+    @State private var queuedEntryID: String?
     var body: some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -97,11 +99,15 @@ struct SongRow: View {
             Button { Task { await player.append(song.id, next: false) } } label: { Label("Queue", systemImage: "text.badge.plus") }.tint(.orange)
         }
         .contextMenu {
+            if let queuedEntryID {
+                Button("Undo add to queue", systemImage: "arrow.uturn.backward") { Task { await player.remove(entryIDs: [queuedEntryID]); self.queuedEntryID = nil; queued = false } }
+            }
             Button("Play", systemImage: "play.fill", action: action)
             Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { Task { await player.append(song.id, next: true) } }
             Button("Add to queue", systemImage: "text.badge.plus") { Task { await player.append(song.id, next: false) } }
             Button(song.isFavourite ? "Remove favourite" : "Favourite", systemImage: song.isFavourite ? "heart.slash" : "heart") { Task { await library.favourite(song) } }
             Button("Add to playlist", systemImage: "music.note.list") { choosingPlaylist = true }
+            Button("Audio details", systemImage: "info.circle") { details = true }
             Button("Edit details", systemImage: "pencil") { editing = true }
             Button("Delete from library", systemImage: "trash", role: .destructive) { deleting = true }
         }
@@ -110,12 +116,14 @@ struct SongRow: View {
         }
         .sheet(isPresented: $choosingPlaylist) { PlaylistPicker(songID: song.id) }
         .sheet(isPresented: $editing) { SongEditorView(song: song) }
+        .sheet(isPresented: $details) { NavigationStack { AudioDetailsView(song: song).toolbar { Button("Done") { details = false } } } }
     }
     private func enqueue() {
         Task { @MainActor in
             let count = player.queue.entries.count
-            await player.append(song.id, next: false)
+            let entryID = await player.append(song.id, next: false)
             guard player.queue.entries.count > count else { return }
+            queuedEntryID = entryID
             queued = true
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             UIAccessibility.post(notification: .announcement, argument: "Added to queue")

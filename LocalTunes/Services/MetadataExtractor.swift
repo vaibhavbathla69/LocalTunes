@@ -14,6 +14,7 @@ struct ExtractedMetadata: Sendable {
     var artwork: Data?
     var lyrics: String?
     var year: Int? = nil
+    var albumArtist: String? = nil
 }
 
 enum MetadataExtractor {
@@ -33,6 +34,7 @@ enum MetadataExtractor {
         }
         var title: String?, artist: String?, album: String?, genre: String?
         var artwork: Data?
+        var albumArtist: String?
         var lyrics = try? await asset.load(.lyrics)
         for item in items {
             let common = item.commonKey?.rawValue.lowercased() ?? ""
@@ -41,12 +43,14 @@ enum MetadataExtractor {
             if title == nil && (common == "title" || key.contains("tit2") || identifier.hasSuffix("/©nam")) { title = try? await item.load(.stringValue) }
             if artist == nil && (common == "artist" || key.contains("tpe1") || identifier.hasSuffix("/©art")) { artist = try? await item.load(.stringValue) }
             if album == nil && (common == "albumname" || key.contains("talb") || identifier.hasSuffix("/©alb")) { album = try? await item.load(.stringValue) }
+            if albumArtist == nil && (key.contains("tpe2") || key.contains("aart") || key.contains("albumartist")) { albumArtist = try? await item.load(.stringValue) }
             if genre == nil && (key.contains("genre") || key.contains("tcon") || identifier.hasSuffix("/©gen")) { genre = try? await item.load(.stringValue) }
             if artwork == nil && (common == "artwork" || key.contains("apic") || key.contains("covr")) { artwork = try? await item.load(.dataValue) }
             if (lyrics ?? "").isEmpty && (key.contains("lyrics") || key.contains("uslt") || identifier.hasSuffix("/©lyr")) { lyrics = try? await item.load(.stringValue) }
         }
         let flac = try? FLACMetadata.read(url)
         if let flac {
+            albumArtist = flac["ALBUMARTIST"] ?? flac["ALBUM_ARTIST"] ?? albumArtist
             title = flac["TITLE"] ?? title
             artist = flac.artists.isEmpty ? (flac["ARTIST"] ?? artist) : flac.artists.joined(separator: "; ")
             album = flac["ALBUM"] ?? album; genre = flac["GENRE"] ?? genre
@@ -65,7 +69,7 @@ enum MetadataExtractor {
         return ExtractedMetadata(title: Song.text(title, fallback: Song.fallbackTitle(filename: originalName)),
                                  artist: Song.text(artist, fallback: "Unknown artist"), album: Song.text(album, fallback: "Unknown album"),
                                  genre: Song.text(genre, fallback: "Unknown genre"), track: AlbumPosition.number(flac?["TRACKNUMBER"]) ?? position.track ?? 0, disc: AlbumPosition.number(flac?["DISCNUMBER"]) ?? position.disc, duration: flac?.duration ?? duration,
-                                 artwork: artwork, lyrics: lyrics, year: year)
+                                 artwork: artwork, lyrics: lyrics, year: year, albumArtist: albumArtist)
     }
 
     static func readPosition(_ url: URL, filename: String) async throws -> (track: Int?, disc: Int?) {

@@ -11,12 +11,13 @@ struct AlbumDetailView: View {
     @State private var hasMore = false
     @State private var generation = 0
     @State private var reordering = false
+    @State private var artwork = false
     @State private var refreshing = false
     @State private var errorMessage: String?
 
     var body: some View {
         List {
-            CollectionHeader(title: albumName, subtitle: albumDescription, song: songs.first, symbol: "square.stack.fill")
+            CollectionHeader(title: AlbumIdentity.title(albumName), subtitle: albumDescription, song: songs.first, symbol: "square.stack.fill")
                 .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let summary, summary.count > 0 {
                 HStack {
@@ -45,13 +46,14 @@ struct AlbumDetailView: View {
             }
         }
         .listStyle(.plain).scrollContentBackground(.hidden).background(Palette.background)
-        .navigationTitle(albumName).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(AlbumIdentity.title(albumName)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if refreshing { ProgressView().accessibilityLabel("Reading album track numbers") }
                 else {
                     Menu {
                         Button(library.home.pins.contains(HomePin(kind: .album, value: albumName)) ? "Unpin from Home" : "Pin to Home", systemImage: "pin") { Task { await library.togglePin(HomePin(kind: .album, value: albumName)) } }
+                        Button("Change album artwork", systemImage: "photo") { artwork = true }
                         Button("Reorder tracks", systemImage: "arrow.up.arrow.down") { reordering = true }
                         Button("Use disc & track numbers", systemImage: "list.number") { Task { await resetOrder() } }
                         Button("Refresh track numbers from files", systemImage: "arrow.clockwise") { Task { await refreshTags() } }
@@ -65,6 +67,7 @@ struct AlbumDetailView: View {
             else if summary?.count == 0 { ContentUnavailableView("No songs", systemImage: "square.stack") }
         }
         .task(id: library.revision) { await reload() }
+        .sheet(isPresented: $artwork) { AlbumArtworkView(album: albumName) }
         .sheet(isPresented: $reordering) { AlbumOrderEditor(albumName: albumName) }
         .alert("Album", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -138,7 +141,7 @@ private struct AlbumOrderEditor: View {
                             }
                         }.padding(.vertical, 4)
                     }.onMove { offsets, destination in songs.move(fromOffsets: offsets, toOffset: destination) }
-                } header: { Text(albumName) }
+                } header: { Text(AlbumIdentity.title(albumName)) }
             }.environment(\.editMode, .constant(.active))
                 .navigationTitle("Track order").navigationBarTitleDisplayMode(.inline)
                 .toolbar {

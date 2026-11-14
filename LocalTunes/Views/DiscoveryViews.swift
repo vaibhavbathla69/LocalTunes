@@ -18,7 +18,7 @@ struct ArtistDetailView: View {
                     LazyHStack(spacing: 16) {
                         ForEach(albums) { album in GroupCard(group: album, kind: .album).frame(width: 145) }
                     }.padding(.vertical, 8)
-                }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }.scrollClipDisabled().listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
             Section("Top songs") {
                 ForEach(songs.prefix(10)) { song in
@@ -83,7 +83,7 @@ struct SearchFilterEditor: View {
     private func picker(_ label: String, selection: Binding<String>, groups: [GroupSummary]) -> some View {
         Picker(label, selection: selection) {
             Text("Any").tag("")
-            ForEach(groups) { Text($0.name).tag($0.name) }
+            ForEach(groups) { Text($0.name).tag($0.value) }
         }
     }
 }
@@ -106,7 +106,7 @@ struct HomeEditorView: View {
                 if !draft.pins.isEmpty {
                     Section("Pinned") {
                         ForEach(draft.pins) { pin in
-                            Text(pin.kind == .album ? pin.value : (library.playlists.first { $0.id == pin.value }?.name ?? "Playlist"))
+                            Text(pin.kind == .album ? AlbumIdentity.title(pin.value) : (library.playlists.first { $0.id == pin.value }?.name ?? "Playlist"))
                         }.onDelete { draft.pins.remove(atOffsets: $0) }
                             .onMove { from, to in draft.pins.move(fromOffsets: from, toOffset: to) }
                     }
@@ -129,7 +129,7 @@ struct PinnedHomeView: View {
             SectionHeading(title: "Pinned")
             ForEach(library.home.pins) { pin in
                 if pin.kind == .album {
-                    NavigationLink { AlbumDetailView(albumName: pin.value) } label: { Label(pin.value, systemImage: "square.stack.fill").font(.headline).padding(.vertical, 8) }
+                    NavigationLink { AlbumDetailView(albumName: pin.value) } label: { Label(AlbumIdentity.title(pin.value), systemImage: "square.stack.fill").font(.headline).padding(.vertical, 8) }
                         .contextMenu { Button("Unpin", systemImage: "pin.slash") { Task { await library.togglePin(pin) } } }
                 } else if let playlist = library.playlists.first(where: { $0.id == pin.value }) {
                     NavigationLink { PlaylistDetailView(playlistID: playlist.id) } label: { Label(playlist.name, systemImage: "music.note.list").font(.headline).padding(.vertical, 8) }
@@ -145,8 +145,15 @@ struct ListeningStatsView: View {
     @EnvironmentObject private var player: PlaybackService
     @State private var report = ListeningReport()
     @State private var clearing = false
+    @State private var period = "All time"
+    @State private var days: [Date] = []
     var body: some View {
         List {
+            Picker("Period", selection: $period) { ForEach(["7 days", "30 days", "This year", "All time"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
+            Section {
+                LabeledContent("Current streak", value: "\(streak) days")
+                Text("Dated history starts with this update. Earlier listening remains in All time.").font(.footnote).foregroundStyle(.secondary)
+            }
             Section {
                 LabeledContent("Listening time", value: report.seconds.clock)
                 LabeledContent("Plays", value: String(report.plays))
@@ -163,15 +170,35 @@ struct ListeningStatsView: View {
                     ForEach(report.artists) { leader in NavigationLink { ArtistDetailView(name: leader.title) } label: { leaderRow(leader) } }
                 }
             }
+            if period == "This year" {
+                Section("Annual recap") {
+                    Text("\(report.plays) plays ? \(report.seconds.clock) listening")
+                    if let artist = report.artists.first { Text("Top artist: " + artist.title) }
+                    ShareLink(item: "My LocalTunes recap: \(report.plays) plays, \(report.seconds.clock) listening. Top artist: \(report.artists.first?.title ?? "?")") { Label("Share recap", systemImage: "square.and.arrow.up") }
+                }
+            }
             Section { Button("Clear listening stats", role: .destructive) { clearing = true } }
         }.navigationTitle("Listening stats").accessibilityIdentifier("stats.screen")
-            .task { await reload() }
+            .task(id: period) { await reload() }
             .confirmationDialog("Clear listening stats?", isPresented: $clearing, titleVisibility: .visible) {
                 Button("Clear stats", role: .destructive) { Task {
                     do { try await player.clearListeningHistory(); await reload(); library.revision += 1 }
                     catch { library.errorMessage = error.localizedDescription }
                 } }
             }
+    }
+    private var streak: Int {
+        let calendar = Calendar.current
+        let present = Set(days.map { calendar.startOfDay(for: $0) })
+        var day = calendar.startOfDay(for: Date())
+        if !present.contains(day) { day = calendar.date(byAdding: .day, value: -1, to: day) ?? day }
+        var count = 0
+        while present.contains(day) {
+            count += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return count
     }
     private func leaderRow(_ leader: ListeningLeader) -> some View {
         HStack {
@@ -185,7 +212,16 @@ struct ListeningStatsView: View {
     }
     private func reload() async {
         await player.flushListening()
-        do { report = try await library.db.listeningReport() } catch { library.errorMessage = error.localizedDescription }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let start: Date?
+        switch period {
+        case "7 days": start = calendar.date(byAdding: .day, value: -6, to: today)
+        case "30 days": start = calendar.date(byAdding: .day, value: -29, to: today)
+        case "This year": start = calendar.date(from: calendar.dateComponents([.year], from: today))
+        default: start = nil
+        }
+        do { report = try await library.db.listeningReport(since: start); days = try await library.db.listeningDays() } catch { library.errorMessage = error.localizedDescription }
     }
 }
 

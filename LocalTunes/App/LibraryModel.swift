@@ -204,6 +204,25 @@ final class LibraryModel: ObservableObject {
         if let old, old != edits.artworkPath { removeArtwork(old) }
     }
 
+    func applyAlbumArtwork(_ album: String, data: Data) async throws {
+        let songs = try await db.songs(group: .album, value: album, limit: -1)
+        var covers: [String: String] = [:]
+        do {
+            for song in songs {
+                guard let path = try MetadataExtractor.writeArtwork(data, id: UUID().uuidString, paths: paths) else { throw LibraryError.message("Choose a supported image") }
+                covers[song.id] = path
+                await Task.yield()
+            }
+            let updated = try await db.setAlbumArtwork(album, paths: covers)
+            for song in updated { player.refreshSong(song) }
+            for song in songs { if let path = song.artworkPath { removeArtwork(path) } }
+            revision += 1
+        } catch {
+            for path in covers.values { removeArtwork(path) }
+            throw error
+        }
+    }
+
     private func removeArtwork(_ path: String) {
         for relative in [path, path.replacingOccurrences(of: ".jpg", with: ".thumb.jpg")] {
             try? FileManager.default.removeItem(at: paths.documents.appendingPathComponent(relative))

@@ -72,7 +72,7 @@ struct BrowseView: View {
                             LazyHStack(spacing: 16) {
                                 ForEach(songs) { song in EditorialAlbumCard(song: song) }
                             }.scrollTargetLayout()
-                        }.scrollTargetBehavior(.viewAligned)
+                        }.scrollTargetBehavior(.viewAligned).scrollClipDisabled()
                     }
                 }
                 HStack(spacing: 12) {
@@ -109,7 +109,7 @@ private struct EditorialAlbumCard: View {
     let song: Song
     @ScaledMetric private var size: CGFloat = 280
     var body: some View {
-        NavigationLink { AlbumDetailView(albumName: song.album) } label: {
+        NavigationLink { AlbumDetailView(albumName: AlbumIdentity.key(for: song)) } label: {
             VStack(alignment: .leading, spacing: 0) {
                 ArtworkView(song: song, size: size, fullSize: true, cornerRadius: 0)
                 VStack(alignment: .leading, spacing: 6) {

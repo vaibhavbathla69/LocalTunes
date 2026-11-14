@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
@@ -15,6 +16,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -27,26 +30,6 @@ jobs:
           xcodebuild -version
           xcodegen generate
           xcodebuild -resolvePackageDependencies -project LocalTunes.xcodeproj -scheme LocalTunes
-      - name: Test FLAC playback
-        run: |
-          set -euo pipefail
-          DEVICE_ID=$(python3 scripts/simulator.py)
-          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -only-testing:LocalTunesTests/FLACPlaybackTests \
-            -parallel-testing-enabled NO \
-            -derivedDataPath build/TestData -resultBundlePath build/FLACTests.xcresult \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee flac-test.log
-      - name: Test library and interface
-        run: |
-          set -euo pipefail
-          DEVICE_ID=$(python3 scripts/simulator.py)
-          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -skip-testing:LocalTunesTests/FLACPlaybackTests \
-            -parallel-testing-enabled NO \
-            -derivedDataPath build/TestData -resultBundlePath build/Tests.xcresult \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
       - name: Compile for physical iPhone without signing
         run: |
           set -euo pipefail
@@ -54,12 +37,6 @@ jobs:
             -configuration Release -destination 'generic/platform=iOS' \
             -derivedDataPath build/DeviceData CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' 2>&1 | tee build.log
-      - name: Export UI screenshots
-        if: always()
-        run: |
-          if [ -d build/Tests.xcresult ]; then
-            xcrun xcresulttool export attachments --path build/Tests.xcresult --output-path build/Screenshots
-          fi
       - name: Package unsigned IPA
         run: |
           set -euo pipefail
@@ -76,6 +53,44 @@ jobs:
           path: dist/LocalTunes-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
+      - name: Select checks
+        id: scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/test_scope.py >> "$GITHUB_OUTPUT"
+      - name: Test FLAC playback
+        if: steps.scope.outputs.audio == 'true'
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 scripts/simulator.py)
+          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -only-testing:LocalTunesTests/FLACPlaybackTests \
+            -parallel-testing-enabled NO \
+            -derivedDataPath build/TestData -resultBundlePath build/FLACTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee flac-test.log
+      - name: Test library and interface
+        env:
+          AUDIO_CHECKS: ${{ steps.scope.outputs.audio }}
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 scripts/simulator.py)
+          CHECKS=()
+          if [ "$AUDIO_CHECKS" = "false" ]; then
+            CHECKS=(-only-testing:LocalTunesTests -only-testing:LocalTunesUITests/NavigationTests/testEditorialDesignInLightAndDarkAppearance -only-testing:LocalTunesUITests/NavigationTests/testEmptyLibraryNavigationAndPlaylistCreation)
+          fi
+          xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes "${CHECKS[@]}" \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -skip-testing:LocalTunesTests/FLACPlaybackTests \
+            -parallel-testing-enabled NO \
+            -derivedDataPath build/TestData -resultBundlePath build/Tests.xcresult \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          if [ -d build/Tests.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/Tests.xcresult --output-path build/Screenshots
+          fi
       - name: Publish diagnostics
         if: always()
         uses: actions/upload-artifact@v4

@@ -170,7 +170,7 @@ actor ImportService {
         let song = Song(id: id, relativePath: "Music/\(destination.lastPathComponent)", originalFilename: source.lastPathComponent,
                         fingerprint: fingerprint, title: metadata.title, artist: metadata.artist, album: metadata.album,
                         genre: metadata.genre, trackNumber: metadata.track, duration: metadata.duration, byteCount: copied,
-                        artworkPath: art, addedAt: Date(), discNumber: metadata.disc, year: metadata.year, artistTagsVersion: 1)
+                        artworkPath: art, addedAt: Date(), discNumber: metadata.disc, year: metadata.year, artistTagsVersion: 1, albumArtist: metadata.albumArtist)
         try await db.save(song)
         committed = true
         return true

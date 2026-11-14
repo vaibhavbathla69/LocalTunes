@@ -117,7 +117,7 @@ private struct HomeAlbumShelf: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 16) {
                 ForEach(albums) { album in
-                    NavigationLink { AlbumDetailView(albumName: album.name) } label: {
+                    NavigationLink { AlbumDetailView(albumName: album.value) } label: {
                         VStack(alignment: .leading, spacing: 9) {
                             CollectionCover(song: album.representative, size: coverSize, seed: album.name)
                             Text(album.name).font(.subheadline.bold()).lineLimit(2)
@@ -127,6 +127,6 @@ private struct HomeAlbumShelf: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("home.\(popular ? "popular" : "recent").album.\(album.name)")
                 }
             }
-        }.frame(height: coverSize + 82)
+        }.scrollClipDisabled().frame(height: coverSize + 82)
     }
 }
