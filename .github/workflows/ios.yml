@@ -75,13 +75,12 @@ jobs:
         run: |
           set -euo pipefail
           DEVICE_ID=$(python3 scripts/simulator.py)
-          CHECKS=()
+          CHECKS=(-skip-testing:LocalTunesTests/FLACPlaybackTests)
           if [ "$AUDIO_CHECKS" = "false" ]; then
-            CHECKS=(-only-testing:LocalTunesTests -only-testing:LocalTunesUITests/NavigationTests/testEditorialDesignInLightAndDarkAppearance -only-testing:LocalTunesUITests/NavigationTests/testEmptyLibraryNavigationAndPlaylistCreation)
+            CHECKS+=(-only-testing:LocalTunesTests -only-testing:LocalTunesUITests/NavigationTests/testEditorialDesignInLightAndDarkAppearance -only-testing:LocalTunesUITests/NavigationTests/testEmptyLibraryNavigationAndPlaylistCreation)
           fi
           xcodebuild test -project LocalTunes.xcodeproj -scheme LocalTunes "${CHECKS[@]}" \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -skip-testing:LocalTunesTests/FLACPlaybackTests \
             -parallel-testing-enabled NO \
             -derivedDataPath build/TestData -resultBundlePath build/Tests.xcresult \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
