@@ -141,6 +141,33 @@ final class FLACPlaybackTests: XCTestCase {
         await player.setVolumeBalancing(false)
     }
     @MainActor
+    func testEditingLiveQueueIsImmediateAndKeepsPlaybackRunning() async throws {
+        let (root, paths, db, songs) = try await fixture(loop: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let player = PlaybackService(db: db, paths: paths)
+        await player.setCrossfade(0)
+        await player.play(ids: songs.map(\.id))
+        let started = await waitUntil { player.position > 0.3 }; XCTAssertTrue(started)
+        let current = player.queue.currentID
+        await player.append(songs[1].id, next: true)
+        await player.append(songs[0].id, next: true)
+        let third = await player.append(songs[1].id, next: true)
+        XCTAssertEqual(player.queue.entries.map(\.songID), [songs[0].id, songs[1].id, songs[0].id, songs[1].id, songs[1].id])
+        let moved = player.queue.entries.last!.id
+        player.move(from: IndexSet(integer: 4), to: 1)
+        XCTAssertEqual(player.queue.entries[1].id, moved, "Drag must update the data before the callback returns")
+        player.deleteQueueEntries([third])
+        XCTAssertFalse(player.queue.entries.contains { $0.id == third })
+        let before = player.position
+        try await Task.sleep(nanoseconds: 600_000_000)
+        XCTAssertEqual(player.queue.currentID, current)
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertGreaterThan(player.position, before)
+        XCTAssertNil(player.errorMessage)
+        player.pause()
+    }
+
+    @MainActor
     func testABRepeatKeepsPlayingTheSelectedSongAndClearsOnNext() async throws {
         let (root, paths, db, songs) = try await fixture(loop: true); defer { try? FileManager.default.removeItem(at: root) }
         let player = PlaybackService(db: db, paths: paths)

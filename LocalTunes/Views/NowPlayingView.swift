@@ -157,25 +157,12 @@ struct QueueView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
-            List {
-                if let song = player.currentSong {
-                    Section("Now playing") { Text(song.title).font(.headline); Text(song.artist).foregroundStyle(.secondary) }
-                }
-                if let nextSong {
-                    Section("Playing next") { Text(nextSong.title).font(.headline); Text(nextSong.artist).foregroundStyle(.secondary) }
-                }
-                Button("Save as playlist", systemImage: "square.and.arrow.down") { saving = true }.disabled(player.queue.entries.isEmpty)
-                Section {
-                    ForEach(player.queue.entries) { entry in QueueSongRow(entry: entry).listRowBackground(Color.white.opacity(0.05)).listRowSeparator(.hidden) }
-                        .onDelete { offsets in
-                            let ids = Set(offsets.compactMap { player.queue.entries.indices.contains($0) ? player.queue.entries[$0].id : nil })
-                            Task { await player.remove(entryIDs: ids) }
-                        }
-                        .onMove { from, to in Task { await player.move(from: from, to: to) } }
-                } header: {
-                    Text("\(player.queue.entries.count) tracks").accessibilityIdentifier("queue.count")
-                }
-            }.scrollContentBackground(.hidden).background { ArtworkBackdrop(song: player.currentSong, strength: 0.45).ignoresSafeArea() }
+            QueueTrackList(entries: player.queue.entries, currentID: player.queue.currentID,
+                           currentSong: player.currentSong, nextSong: nextSong, revision: library.revision,
+                           save: { saving = true }, remove: { player.deleteQueueEntries($0) },
+                           move: { player.move(from: $0, to: $1) },
+                           jump: { id in Task { await player.jump(to: id) } })
+                .equatable()
                 .alert("Save queue", isPresented: $saving) {
                     TextField("Name", text: $queueName)
                     Button("Save") { Task {
@@ -198,19 +185,70 @@ struct QueueView: View {
     }
 }
 
+/// Playback's clock publishes several times a second. Keep those changes outside
+/// the editable List so UIKit can finish a drag without its data being rebuilt.
+private struct QueueTrackList: View, Equatable {
+    let entries: [QueueEntry]
+    let currentID: String?
+    let currentSong: Song?
+    let nextSong: Song?
+    let revision: Int
+    let save: () -> Void
+    let remove: (Set<String>) -> Void
+    let move: (IndexSet, Int) -> Void
+    let jump: (String) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.entries == rhs.entries && lhs.currentID == rhs.currentID &&
+        lhs.currentSong == rhs.currentSong && lhs.nextSong == rhs.nextSong && lhs.revision == rhs.revision
+    }
+
+    var body: some View {
+        List {
+            if let song = currentSong {
+                Section("Now playing") { Text(song.title).font(.headline); Text(song.artist).foregroundStyle(.secondary) }
+            }
+            if let nextSong {
+                Section("Playing next") { Text(nextSong.title).font(.headline); Text(nextSong.artist).foregroundStyle(.secondary) }
+            }
+            Button("Save as playlist", systemImage: "square.and.arrow.down", action: save).disabled(entries.isEmpty)
+            Section {
+                ForEach(entries) { entry in
+                    QueueSongRow(entry: entry, isCurrent: entry.id == currentID, revision: revision) { jump(entry.id) }
+                        .listRowBackground(Color.white.opacity(0.05)).listRowSeparator(.hidden)
+                }
+                .onDelete { offsets in
+                    remove(Set(offsets.compactMap { entries.indices.contains($0) ? entries[$0].id : nil }))
+                }
+                .onMove(perform: move)
+            } header: { Text("\(entries.count) tracks").accessibilityIdentifier("queue.count") }
+        }
+        .accessibilityIdentifier("queue.list")
+        .scrollContentBackground(.hidden)
+        .background { ArtworkBackdrop(song: currentSong, strength: 0.45).ignoresSafeArea() }
+    }
+}
+
 private struct QueueSongRow: View {
     @EnvironmentObject private var library: LibraryModel
-    @EnvironmentObject private var player: PlaybackService
     let entry: QueueEntry
+    let isCurrent: Bool
+    let revision: Int
+    let select: () -> Void
     @State private var song: Song?
     var body: some View {
-        Button { Task { await player.jump(to: entry.id) } } label: {
+        Button(action: select) {
             HStack(spacing: 12) {
                 ArtworkView(song: song, size: 48)
-                VStack(alignment: .leading, spacing: 5) { Text(song?.title ?? "Loading…").font(.subheadline.bold()).lineLimit(1); Text(song?.artist ?? "").font(.caption).foregroundStyle(Palette.muted).lineLimit(1) }
+                VStack(alignment: .leading, spacing: 5) { Text(song?.title ?? "Loading...").font(.subheadline.bold()).lineLimit(1); Text(song?.artist ?? "").font(.caption).foregroundStyle(Palette.muted).lineLimit(1) }
                 Spacer()
-                if entry.id == player.queue.currentID { Image(systemName: "waveform").foregroundStyle(Palette.accent) }
+                if isCurrent { Image(systemName: "waveform").foregroundStyle(Palette.accent) }
             }.padding(.vertical, 6)
-        }.buttonStyle(.plain).task(id: entry.songID) { do { song = try await library.db.song(entry.songID) } catch { library.errorMessage = error.localizedDescription } }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("queue.entry.\(entry.id)")
+        .accessibilityLabel(song?.title ?? "Loading")
+        .accessibilityValue(isCurrent ? "Now playing" : "Queued")
+        .task(id: "\(entry.songID)|\(revision)") { do { song = try await library.db.song(entry.songID) } catch { library.errorMessage = error.localizedDescription } }
     }
 }

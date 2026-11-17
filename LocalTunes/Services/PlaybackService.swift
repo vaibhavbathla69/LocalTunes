@@ -205,10 +205,23 @@ final class PlaybackService: ObservableObject {
         await remove(entryIDs: Set(queue.entries.filter { $0.songID == id }.map(\.id)))
     }
 
-    func move(from offsets: IndexSet, to destination: Int) async {
+    func move(from offsets: IndexSet, to destination: Int) {
         synchronizeCurrentItem()
         queue.position = position
-        queue.move(from: offsets, to: destination); saveQueue(); await replaceUpcoming()
+        queue.move(from: offsets, to: destination); saveQueue()
+        Task { await replaceUpcoming() }
+    }
+
+    /// SwiftUI must see the new row order in the edit callback's transaction.
+    func deleteQueueEntries(_ entryIDs: Set<String>) {
+        synchronizeCurrentItem()
+        let old = queue.currentID, playing = wantsPlayback
+        queue.position = position
+        queue.remove(entryIDs: entryIDs); saveQueue()
+        Task {
+            if old != queue.currentID { await rebuild(autoplay: playing) }
+            else { await replaceUpcoming() }
+        }
     }
 
     func toggleShuffle() async { synchronizeCurrentItem(); queue.position = position; queue.toggleShuffle(); saveQueue(); await replaceUpcoming() }
