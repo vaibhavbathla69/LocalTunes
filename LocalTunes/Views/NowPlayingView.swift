@@ -173,11 +173,14 @@ struct QueueView: View {
                     Button("Cancel", role: .cancel) { }
                 }
                 .task(id: player.queue.following(automatic: true)?.id) {
-                    nextSong = nil
                     if let next = player.queue.following(automatic: true) {
-                        do { nextSong = try await library.db.song(next.songID) }
+                        do {
+                            let song = try await library.db.song(next.songID)
+                            guard !Task.isCancelled else { return }
+                            nextSong = song
+                        }
                         catch { library.errorMessage = error.localizedDescription }
-                    }
+                    } else { nextSong = nil }
                 }
                 .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("Queue empty", systemImage: "list.bullet") } }

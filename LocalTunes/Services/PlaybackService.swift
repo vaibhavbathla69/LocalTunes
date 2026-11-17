@@ -218,8 +218,9 @@ final class PlaybackService: ObservableObject {
         let old = queue.currentID, playing = wantsPlayback
         queue.position = position
         queue.remove(entryIDs: entryIDs); saveQueue()
+        let changedCurrent = old != queue.currentID
         Task {
-            if old != queue.currentID { await rebuild(autoplay: playing) }
+            if changedCurrent { await rebuild(autoplay: playing) }
             else { await replaceUpcoming() }
         }
     }
