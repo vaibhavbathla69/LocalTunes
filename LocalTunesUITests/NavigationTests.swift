@@ -375,7 +375,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [reordered], timeout: 5), .completed)
         capture(app, name: "44-LiveQueueEditing")
         // End edit mode, then dismiss the sheet with its separate Done button.
-        app.navigationBars["Queue"].buttons["Done"].element(boundBy: 0).tap()
+        app.navigationBars["Queue"].buttons.matching(identifier: "Done").element(boundBy: 0).tap()
         app.navigationBars["Queue"].buttons["Done"].tap()
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Pause'"), object: app.buttons["nowPlaying.playPause"])
         XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 5), .completed)
