@@ -153,12 +153,13 @@ struct QueueView: View {
     @State private var saving = false
     @State private var queueName = ""
     @State private var nextSong: Song?
+    @State private var editingQueue = false
     @EnvironmentObject private var player: PlaybackService
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             QueueTrackList(entries: player.queue.entries, currentID: player.queue.currentID,
-                           currentSong: player.currentSong, nextSong: nextSong, revision: library.revision,
+                           currentSong: player.currentSong, nextSong: nextSong, revision: library.revision, editing: editingQueue,
                            save: { saving = true }, remove: { player.deleteQueueEntries($0) },
                            move: { player.move(from: $0, to: $1) },
                            jump: { id in Task { await player.jump(to: id) } })
@@ -182,7 +183,13 @@ struct QueueView: View {
                         catch { library.errorMessage = error.localizedDescription }
                     } else { nextSong = nil }
                 }
-                .navigationTitle("Queue").toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+                .navigationTitle("Queue").toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(editingQueue ? "Finish editing" : "Edit") { editingQueue.toggle() }
+                            .accessibilityIdentifier("queue.edit")
+                    }
+                    ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+                }
                 .overlay { if player.queue.entries.isEmpty { ContentUnavailableView("Queue empty", systemImage: "list.bullet") } }
         }
     }
@@ -196,6 +203,7 @@ private struct QueueTrackList: View, Equatable {
     let currentSong: Song?
     let nextSong: Song?
     let revision: Int
+    let editing: Bool
     let save: () -> Void
     let remove: (Set<String>) -> Void
     let move: (IndexSet, Int) -> Void
@@ -203,7 +211,7 @@ private struct QueueTrackList: View, Equatable {
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.entries == rhs.entries && lhs.currentID == rhs.currentID &&
-        lhs.currentSong == rhs.currentSong && lhs.nextSong == rhs.nextSong && lhs.revision == rhs.revision
+        lhs.currentSong == rhs.currentSong && lhs.nextSong == rhs.nextSong && lhs.revision == rhs.revision && lhs.editing == rhs.editing
     }
 
     var body: some View {
@@ -227,6 +235,7 @@ private struct QueueTrackList: View, Equatable {
             } header: { Text("\(entries.count) tracks").accessibilityIdentifier("queue.count") }
         }
         .accessibilityIdentifier("queue.list")
+        .environment(\.editMode, .constant(editing ? .active : .inactive))
         .scrollContentBackground(.hidden)
         .background { ArtworkBackdrop(song: currentSong, strength: 0.45).ignoresSafeArea() }
     }

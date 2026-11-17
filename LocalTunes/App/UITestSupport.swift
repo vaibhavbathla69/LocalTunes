@@ -14,7 +14,8 @@ enum UITestSupport {
         let artistTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-artists")
         let historyTest = ProcessInfo.processInfo.arguments.contains("--ui-test-seed-history")
         let artistInputs = [("CI Frank one", 36), ("CI Frank two", 37), ("CI Frank alias", 41), ("CI Travis collab", 38), ("CI Weeknd solo", 39), ("CI Travis solo", 42)]
-        let inputs = [("CI reference tone", 60), ("CI second tone", 30)] + (albumTest ? [("CI Zulu opener", 45)] : []) + (artistTest ? artistInputs : [])
+        let longPlayback = ProcessInfo.processInfo.arguments.contains("--ui-test-long-playback")
+        let inputs = [("CI reference tone", longPlayback ? 180 : 60), ("CI second tone", 30)] + (albumTest ? [("CI Zulu opener", 45)] : []) + (artistTest ? artistInputs : [])
         for (name, seconds) in inputs {
             var data = Data()
             let size = seconds * 44100 * 2

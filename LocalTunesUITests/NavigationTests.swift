@@ -354,7 +354,7 @@ final class NavigationTests: XCTestCase {
     @MainActor
     func testQueueCanBeReorderedWhileMusicKeepsPlaying() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio"]
+        app.launchArguments = ["--ui-test-isolated-library", "--ui-test-seed-audio", "--ui-test-long-playback"]
         app.launch()
         XCTAssertTrue(app.buttons["home.search"].waitForExistence(timeout: 20))
         app.tabBars.buttons["Library"].tap()
@@ -363,19 +363,18 @@ final class NavigationTests: XCTestCase {
         app.buttons["miniPlayer"].tap()
         app.buttons["nowPlaying.queue"].tap()
         XCTAssertTrue(app.navigationBars["Queue"].waitForExistence(timeout: 5))
-        app.buttons["Edit"].tap()
+        app.buttons["queue.edit"].tap()
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'queue.entry.'"))
         XCTAssertEqual(rows.count, 2)
         let secondID = rows.element(boundBy: 1).identifier
-        let firstCell = app.cells.containing(.button, identifier: rows.element(boundBy: 0).identifier).firstMatch
-        let secondCell = app.cells.containing(.button, identifier: secondID).firstMatch
-        secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).press(forDuration: 0.5,
-            thenDragTo: firstCell.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.25)))
+        let handles = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'reorder'"))
+        XCTAssertTrue(handles.element(boundBy: 1).waitForExistence(timeout: 5))
+        let destination = handles.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        handles.element(boundBy: 1).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.5, thenDragTo: destination)
         let reordered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "identifier == %@", secondID), object: rows.element(boundBy: 0))
         XCTAssertEqual(XCTWaiter.wait(for: [reordered], timeout: 5), .completed)
         capture(app, name: "44-LiveQueueEditing")
-        // End edit mode, then dismiss the sheet with its separate Done button.
-        app.navigationBars["Queue"].buttons.matching(identifier: "Done").element(boundBy: 0).tap()
+        app.buttons["queue.edit"].tap()
         app.navigationBars["Queue"].buttons["Done"].tap()
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Pause'"), object: app.buttons["nowPlaying.playPause"])
         XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 5), .completed)
